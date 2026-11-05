@@ -1,8 +1,8 @@
 name: Импорт истории цен (с домашнего компьютера)
 
 # Steam не отдаёт историю цен серверам GitHub, поэтому она собирается дома скриптом scripts/collect-history.mjs.
-# Готовый файл cs2-history.json.gz прикрепите к релизу data-store (Releases → «Хранилище данных» → Edit →
-# перетащить файл → Update release) и запустите этот workflow.
+# Готовый файл cs2-history.json.gz кладётся в ветку history-upload (или прикрепляется к релизу data-store:
+# Releases → «Хранилище данных» → Edit → перетащить файл → Update release), затем запускается этот workflow.
 on:
   workflow_dispatch:
 
@@ -26,8 +26,13 @@ jobs:
         with:
           node-version: 22
       - name: Файл с историей
+        # 1) ветка history-upload (туда файл кладётся прямо из чата), 2) вложение в релиз data-store
         run: |
-          gh release download data-store -p cs2-history.json.gz -D . || { echo "::error::В релизе data-store нет файла cs2-history.json.gz"; exit 1; }
+          if git fetch --depth 1 origin history-upload 2>/dev/null && git show FETCH_HEAD:cs2-history.json.gz > cs2-history.json.gz 2>/dev/null && [ -s cs2-history.json.gz ]; then
+            echo "файл из ветки history-upload: $(du -h cs2-history.json.gz | cut -f1)"
+          else
+            gh release download data-store -p cs2-history.json.gz -D . --clobber || { echo "::error::Нет cs2-history.json.gz ни в ветке history-upload, ни в релизе data-store"; exit 1; }
+          fi
       - name: Импорт
         run: |
           scripts/store.sh pull history

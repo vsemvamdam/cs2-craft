@@ -2,6 +2,8 @@
 // Сбор полной истории цен Steam Market с обычного домашнего подключения.
 // Steam отвечает 429 на все запросы истории с серверов GitHub, поэтому этот шаг делается на своём компьютере.
 // Вход в Steam не нужен: история берётся со страницы предмета на торговой площадке (тот же график, что видят все).
+// С ноября 2026 Steam по умолчанию показывает гостям бету нового маркета (без графика в странице) — скрипт
+// отправляет ту же настройку, что ставит кнопка «Выйти из бета-теста торговой площадки» (cookie bMarketOptOut=1).
 //
 //   node collect-history.mjs                 # 600 самых продаваемых скинов, ~45 минут
 //   node collect-history.mjs --limit 1500    # больше предметов — дольше (≈4 с на предмет)
@@ -16,7 +18,7 @@ import zlib from 'node:zlib';
 const args = process.argv.slice(2);
 const opt = (k, d) => { const i = args.indexOf('--' + k); return i >= 0 ? args[i + 1] : d; };
 const LIMIT = +opt('limit', 600);
-const DELAY = +opt('delay', 3500);
+let DELAY = +opt('delay', 5000);
 const TIMEOUT = +opt('timeout', 25000);
 const OUT = opt('out', 'cs2-history.json.gz');
 const SITE = 'https://vsemvamdam.github.io/cs2-craft/data/history-targets.json';
@@ -38,7 +40,11 @@ const pending = (it) => !it || !(it.p?.length || it.err === 404);
 async function get(url) {
   return fetch(url, {
     signal: AbortSignal.timeout(TIMEOUT),
-    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) cs2-craft history', 'Accept-Language': 'en-US,en;q=0.9' },
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) cs2-craft history',
+      'Accept-Language': 'en-US,en;q=0.9',
+      Cookie: 'bMarketOptOut=1', // old market page: it has the price chart (var line1) in the HTML
+    },
   });
 }
 
@@ -60,7 +66,7 @@ async function main() {
   // first contact: say right away whether Steam answers at all
   console.log('Проверяю, отвечает ли steamcommunity.com…');
 
-  let ok = 0, empty = 0, wait = 0, netErr = 0, emptyRun = 0;
+  let ok = 0, empty = 0, wait = 0, netErr = 0, emptyRun = 0, newMarket = 0;
   const t0 = Date.now();
   for (let i = 0; i < todo.length && !stop; i++) {
     const name = todo[i];
@@ -88,7 +94,8 @@ async function main() {
     netErr = 0;
     if (r.status === 429) {
       wait = Math.min((wait || 30000) * 2, 600000);
-      console.log(`${tag} Steam просит подождать (429) — пауза ${Math.round(wait / 1000)} с…`);
+      DELAY = Math.min(DELAY + 1000, 12000); // go slower from now on
+      console.log(`${tag} Steam просит подождать (429) — пауза ${Math.round(wait / 1000)} с, дальше по ${DELAY / 1000} с на предмет…`);
       save(db);
       await sleep(wait);
       i--;
@@ -98,6 +105,16 @@ async function main() {
     if (!r.ok) {
       db.items[name] = { err: r.status };
       console.log(`${tag} ${short(name)} — Steam ответил ${r.status}`);
+    } else if (/\/listings\/730\/G\d/.test(r.url)) {
+      // Steam ignored the opt-out and sent the new market (no chart in the page)
+      newMarket = (newMarket || 0) + 1;
+      db.items[name] = { p: [] };
+      console.log(`${tag} ${short(name)} — Steam открыл новую версию маркета (без графика)`);
+      if (newMarket >= 3 && ok === 0) {
+        save(db);
+        console.log('\nSteam больше не отдаёт старую страницу с графиком цен. Пришлите скриншот — нужен новый способ.');
+        process.exit(3);
+      }
     } else {
       const html = await r.text();
       const m = html.match(/var line1=(\[.*?\]);/s);
