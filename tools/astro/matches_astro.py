@@ -17,9 +17,12 @@ A. Матчи (ноябрь 2021 — сейчас; 2021-01…10 — только
      decider — доля Bo3, дошедших до третьей карты.
    Факторы — те же, что в анализе рынка (astrolib.astro_table): ретроградность планет, фазы Луны, затмения,
    смена знаков, точные мажорные аспекты, Луна и Солнце в каждом знаке. Тест — разница «дни с фактором минус
-   остальные» с весом по числу матчей/карт, значимость по циклическим сдвигам фактора по календарю, поправка
-   Бенджамини–Хохберга (q < 0.1) на все проверки сразу, воспроизводимость: p < 0.05 с тем же знаком и в первых
-   60%, и в последних 40% периода. MDE — минимальный эффект, который тест поймал бы в ~80% случаев.
+   остальные» с весом по числу матчей/карт; значимость — по всем циклическим сдвигам фактора по календарю
+   (сохраняют автокорреляцию и сезонность): z = наблюдаемое / разброс по сдвигам, p — гауссов хвост
+   (точный p по сдвигам не бывает меньше ~1/1200, а FDR на сотнях проверок требует меньше; калибровка гауссова
+   p проверена на синтетике без эффекта). Поправка Бенджамини–Хохберга (q < 0.1) на все проверки сразу,
+   воспроизводимость: p < 0.05 с тем же знаком и в первых 60%, и в последних 40% периода. MDE — минимальный
+   эффект, который тест поймал бы в ~80% случаев.
    Для сравнения — реальные эффекты в тех же данных: Bo1 против Bo3, LAN против онлайна, S против A,
    калибровка Эло, MR12 против MR15 для близких карт. И контроль мощности на синтетике.
 B. Игроки (демки; даты рождения с Liquipedia, игрок принимается только при совпадении steam64ID):
@@ -206,7 +209,7 @@ def center(y: pd.Series, w: pd.Series, groups: list[pd.Series]):
     return y
 
 
-def match_tests(days: pd.DataFrame, astro: pd.DataFrame, log):
+def match_tests(days: pd.DataFrame, astro: pd.DataFrame, log, outcomes=tuple(OUTCOMES)):
     df = days.merge(astro, on="day", how="left")
     signs = {f"moon_sign_{m}": df["moon_sign"] == m for m in range(12)} | {f"sun_sign_{m}": df["sun_sign"] == m for m in range(12)}
     df = pd.concat([df, pd.DataFrame(signs)], axis=1)
@@ -217,7 +220,7 @@ def match_tests(days: pd.DataFrame, astro: pd.DataFrame, log):
     Y = {k: center(df[k], W[k], [wd, era]) for k in OUTCOMES}
     rng = np.random.default_rng(SEED)
     res = []
-    for k in OUTCOMES:
+    for k in outcomes:
         y, w = Y[k].to_numpy(), W[k].to_numpy()
         have = np.flatnonzero(w > 0)
         split = have[int(len(have) * 0.6)]
@@ -241,7 +244,7 @@ def match_tests(days: pd.DataFrame, astro: pd.DataFrame, log):
     return res, Y, W, df, split_date
 
 
-def power_check(days_df, astro_df, matches, start, end, log, n_sim=200):
+def power_check(days_df, astro_df, matches, start, end, log, n_sim=200, n_null=100):
     """synthetic upsets with the real schedule and Elo probabilities: (a) no effect at all — how many tests pass
     FDR + replication by chance; (b) an injected effect on Mercury-retrograde / full-moon days — how often it is found"""
     rng = np.random.default_rng(SEED + 1)
@@ -269,18 +272,25 @@ def power_check(days_df, astro_df, matches, start, end, log, n_sim=200):
                 hits += r is not None and r["p"] < 0.05 and r["diff"] > 0
             out[f"{feat}:+{dlt:.2f}"] = hits / n_sim
             log(f"мощность: {feat} +{dlt * 100:.0f} п.п. → найдено в {hits / n_sim:.0%} симуляций")
-    # full null run: the whole battery of tests on random upsets
-    u = (rng.random(len(p)) < p).astype(float)
-    syn = days_df.copy()
-    y = np.bincount(di, weights=u - p, minlength=n)
-    with np.errstate(invalid="ignore", divide="ignore"):
-        syn["upset"] = y / w
-    res, *_ = match_tests(syn, astro_df, log)
-    res = [r for r in res if r["outcome"] == "upset"]
-    q = bh([r["p"] for r in res])
-    out["null_battery"] = {"tests": len(res), "raw_p05": int(sum(r["p"] < 0.05 for r in res)), "fdr_q10": int(sum(x < 0.1 for x in q)),
-                           "replicated": int(sum(r["replicates"] for r in res))}
-    log(f"синтетика без эффекта: {out['null_battery']}")
+    # null battery: the whole family of upset tests on random upsets drawn from the Elo probabilities (no astro
+    # effect by construction), repeated — how often does anything pass FDR, replication, both?
+    reps = []
+    for i in range(n_null):
+        u = (rng.random(len(p)) < p).astype(float)
+        syn = days_df.copy()
+        y = np.bincount(di, weights=u - p, minlength=n)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            syn["upset"] = y / w
+        res, *_ = match_tests(syn, astro_df, log, outcomes=("upset",))
+        q = bh([r["p"] for r in res])
+        reps.append({"tests": len(res), "raw_p05": int(sum(r["p"] < 0.05 for r in res)), "fdr_q10": int(sum(x < 0.1 for x in q)),
+                     "replicated": int(sum(r["replicates"] for r in res)), "both": int(sum(x < 0.1 and r["replicates"] for r, x in zip(res, q)))})
+    out["null_battery"] = {"runs": n_null, "tests_per_run": reps[0]["tests"] if reps else 0,
+                           "mean_raw_p05": float(np.mean([r["raw_p05"] for r in reps])),
+                           "runs_with_fdr_hit": int(sum(r["fdr_q10"] > 0 for r in reps)),
+                           "runs_with_replicated_hit": int(sum(r["replicated"] > 0 for r in reps)),
+                           "runs_with_fdr_and_replicated": int(sum(r["both"] > 0 for r in reps)), "runs": reps}
+    log(f"синтетика без эффекта ({n_null} прогонов): " + json.dumps({k: v for k, v in out["null_battery"].items() if k != "runs"}))
     return out
 
 
@@ -388,6 +398,7 @@ def lomb(t, y, w, periods):
 
 
 def cycles(Y, W, days, n_perm=500):
+    """Y["upset"] here is the daily excess of upsets WITHOUT weekday centering (the weekly period is a sanity check)"""
     rng = np.random.default_rng(SEED + 4)
     y, w = Y["upset"].to_numpy(), W["upset"].to_numpy()
     ok = (w > 0) & ~np.isnan(y)
@@ -540,7 +551,7 @@ def natal(bd: dt.date):
     moon = sign_of(L["Moon"])
     # Moon moves ~13°/day: with an unknown birth time the noon sign is uncertain near sign borders
     lm = L["Moon"] % 30
-    return {"sun": sun, "moon": moon, "element": element_of(sun), "moon_uncertain": lm < 6.6 or lm > 23.4}
+    return {"sun": sun, "moon": moon, "element": element_of(sun), "moon_uncertain": lm < 7.7 or lm > 22.3}  # ≤ 15.4°/day
 
 
 def games_table(people):
@@ -614,6 +625,11 @@ def players_between(people, games, log, min_rounds=150):
     q = bh([r["p"] for r in res])
     for r, qq in zip(res, q):
         r["q"] = qq
+    # sensitivity: the Moon sign only for players whose noon Moon is far enough from a sign border to hold for any birth time
+    sure = agg[~agg["moon_unc"]]
+    for met in ("ADR", "KPR", "KD"):
+        _, p = perm_anova(sure[met].to_numpy(), sure["moon"].to_numpy(), 12, 5000, rng)
+        res.append({"group": "moon_certain", "metric": met, "p": p, "players": int(len(sure)), "sensitivity": True})
     # null band of sign means (for the chart): 95% range of a random sign's mean under shuffled labels
     band = {}
     for met in ("ADR", "KPR", "KD"):
@@ -728,7 +744,7 @@ def players_within(people, games, astro_full, log, n_perm=2000):
 ORANGE, BLUE, GREY, DARK = "#e8650c", "#4e8ddb", "#9aa5b1", "#3b4250"
 
 
-def plots(out: Path, res, real, cyc, days, Y, W, between, agg, band, dist, within):
+def plots(out: Path, res, real, cyc, days, Y, W, between, agg, band, dist, within, matches=None):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -745,7 +761,7 @@ def plots(out: Path, res, real, cyc, days, Y, W, between, agg, band, dist, withi
         ax.axvline(0, color="#666", lw=0.8)
         ax.set_yticks(yy, [f"{r['label']} ({r['days']} дн.)" for r in main], fontsize=8)
         ax.set_xlabel("изменение доли апсетов, п.п. (сверх ожидаемого по Эло)")
-        ax.set_title("Апсеты в дни астрособытий: всё в пределах случайности?")
+        ax.set_title("Апсеты в дни астрособытий и разброс случайности")
         ax.legend(frameon=False, fontsize=8, loc="lower right")
         fig.tight_layout()
         fig.savefig(out / "factors.png", dpi=150)
@@ -759,26 +775,41 @@ def plots(out: Path, res, real, cyc, days, Y, W, between, agg, band, dist, withi
     fig.tight_layout()
     fig.savefig(out / "pvalues.png", dpi=150)
     plt.close(fig)
-    # 3. real effects
-    fig, axs = plt.subplots(1, 2, figsize=(11, 4))
-    cal = real["calibration"]
-    axs[0].plot([0.5, 1], [0.5, 1], color="#bbb", lw=1, ls="--")
-    axs[0].plot([c["pred"] for c in cal], [c["obs"] for c in cal], "o-", color=ORANGE)
-    axs[0].set_xlabel("прогноз Эло: вероятность победы фаворита")
-    axs[0].set_ylabel("фактическая доля побед фаворита")
-    axs[0].set_title("Реальный эффект: сила команды работает")
-    items = [("Bo1", real["bo1_vs_bo3_upset"]["a"], real["bo1_vs_bo3_upset"]["n_a"]), ("Bo3", real["bo1_vs_bo3_upset"]["b"], real["bo1_vs_bo3_upset"]["n_b"]),
-             ("онлайн", real["online_vs_lan_upset"]["a"], real["online_vs_lan_upset"]["n_a"]), ("LAN", real["online_vs_lan_upset"]["b"], real["online_vs_lan_upset"]["n_b"]),
-             ("A-тир", real["a_vs_s_upset"]["a"], real["a_vs_s_upset"]["n_a"]), ("S-тир", real["a_vs_s_upset"]["b"], real["a_vs_s_upset"]["n_b"])]
-    retro = next((r for r in res if r["outcome"] == "upset" and r["feature"] == "retro_Mercury"), None)
-    base = real["upset_rate"][0]
-    if retro:
-        items += [("ретро-\nМеркурий", base + retro["diff"], None)]
-    axs[1].bar(range(len(items)), [v * 100 for _, v, _ in items], color=[BLUE, BLUE, DARK, DARK, GREY, GREY, ORANGE][:len(items)])
-    axs[1].set_xticks(range(len(items)), [x for x, _, _ in items], fontsize=8)
-    axs[1].set_ylabel("доля апсетов, %")
-    axs[1].set_ylim(min(v for _, v, _ in items) * 100 - 5, max(v for _, v, _ in items) * 100 + 3)
-    axs[1].set_title("Доля апсетов: формат, LAN, тир")
+    # 3. real effects: Elo gap → favourite's win rate; differences with 95% CI — real factors next to astro ones
+    fig, axs = plt.subplots(1, 2, figsize=(12, 4.4), gridspec_kw={"width_ratios": [1, 1.25]})
+    gb = real["elo_gap"]
+    x = np.arange(len(gb))
+    obs = np.array([g["obs"] for g in gb])
+    nn = np.array([g["n"] for g in gb])
+    se = np.sqrt(obs * (1 - obs) / nn)
+    axs[0].bar(x, obs * 100, color=BLUE, alpha=0.8, label="факт")
+    axs[0].errorbar(x, obs * 100, yerr=1.96 * se * 100, fmt="none", ecolor=DARK, lw=1, capsize=3)
+    axs[0].plot(x, [g["pred"] * 100 for g in gb], "_", color=ORANGE, ms=22, mew=2.5, label="прогноз Эло")
+    axs[0].set_xticks(x, [g["gap"] for g in gb], fontsize=8)
+    axs[0].set_ylim(40, 95)
+    axs[0].set_xlabel("разница рейтингов Эло перед матчем")
+    axs[0].set_ylabel("побед фаворита, %")
+    axs[0].set_title("Настоящий эффект: сила команды")
+    axs[0].legend(frameon=False, fontsize=8, loc="upper left")
+    rows = []
+    for key, lab in (("online_vs_lan_upset", "Онлайн − LAN: апсеты"), ("a_vs_s_upset", "A-тир − S-тир: апсеты"),
+                     ("bo3_vs_bo1_same_gap", "Bo3 − Bo1: победы фаворита\nпри равной разнице Эло"), ("close_cs2_vs_csgo", "CS2 (MR12) − CS:GO (MR15):\nблизкие карты")):
+        if key in real:
+            rows.append((lab, real[key]["diff"], real[key]["ci"], "real"))
+    for feat, outc in (("retro_Mercury", "upset"), ("moon_full", "upset"), ("moon_new", "upset"), ("eclipse", "upset"), ("retro_Mercury", "close"), ("moon_full", "close")):
+        r = next((r for r in res if r["feature"] == feat and r["outcome"] == outc), None)
+        if r:
+            what = {"upset": "апсеты", "close": "близкие карты"}[outc]
+            rows.append((f"{r['label'].replace(' (±1 день)', '')}: {what}", r["diff"], [r["diff"] - 1.96 * r["null_sd"], r["diff"] + 1.96 * r["null_sd"]], "astro"))
+    y = np.arange(len(rows))[::-1]
+    for yy, (lab, d, ci, kind) in zip(y, rows):
+        c = DARK if kind == "real" else ORANGE
+        axs[1].plot([ci[0] * 100, ci[1] * 100], [yy, yy], color=c, lw=2, alpha=0.6)
+        axs[1].plot(d * 100, yy, "o", color=c, ms=6)
+    axs[1].axvline(0, color="#666", lw=0.8)
+    axs[1].set_yticks(y, [r[0] for r in rows], fontsize=8)
+    axs[1].set_xlabel("разница, п.п. (95% интервал)")
+    axs[1].set_title("Реальные факторы (тёмные) и астрология (оранжевые)")
     fig.tight_layout()
     fig.savefig(out / "real_effects.png", dpi=150)
     plt.close(fig)
@@ -797,30 +828,29 @@ def plots(out: Path, res, real, cyc, days, Y, W, between, agg, band, dist, withi
     fig.tight_layout()
     fig.savefig(out / "cycles.png", dpi=150)
     plt.close(fig)
-    # 5. timeline: rolling excess upsets with Mercury retrograde bands
-    y, w = Y["upset"].fillna(0).to_numpy(), W["upset"].to_numpy()
-    num = pd.Series(y * w).rolling(30, min_periods=1).sum()
-    den = pd.Series(w).rolling(30, min_periods=1).sum()
-    roll = (num / den.replace(0, np.nan)) * 100
-    fig, ax = plt.subplots(figsize=(11, 3.4))
-    ax.plot(days["date"], roll, color=ORANGE, lw=1.2)
-    rb = days["retro_Mercury"].to_numpy() if "retro_Mercury" in days else np.zeros(len(days), bool)
-    i = 0
-    while i < len(rb):
-        if rb[i]:
-            j = i
-            while j < len(rb) and rb[j]:
-                j += 1
-            ax.axvspan(days["date"].iloc[i], days["date"].iloc[j - 1], color=BLUE, alpha=0.15, lw=0)
-            i = j
-        else:
-            i += 1
-    ax.axhline(0, color="#666", lw=0.8)
-    ax.set_ylabel("п.п. сверх ожидания")
-    ax.set_title("Апсеты сверх ожидаемого по Эло, скользящие 30 дней · синие полосы — ретроградный Меркурий")
-    fig.tight_layout()
-    fig.savefig(out / "timeline.png", dpi=150)
-    plt.close(fig)
+    # 5. timeline: rolling excess of upsets over the last 200 matches, Mercury retrograde bands
+    if matches is not None:
+        el = matches[matches["eligible"]].sort_values("ts")
+        roll = el["excess"].rolling(200, min_periods=100).mean() * 100
+        fig, ax = plt.subplots(figsize=(11, 3.4))
+        ax.plot(el["date"], roll, color=ORANGE, lw=1.2)
+        rb = days["retro_Mercury"].to_numpy() if "retro_Mercury" in days else np.zeros(len(days), bool)
+        i = 0
+        while i < len(rb):
+            if rb[i]:
+                j = i
+                while j < len(rb) and rb[j]:
+                    j += 1
+                ax.axvspan(days["date"].iloc[i], days["date"].iloc[j - 1], color=BLUE, alpha=0.15, lw=0)
+                i = j
+            else:
+                i += 1
+        ax.axhline(0, color="#666", lw=0.8)
+        ax.set_ylabel("п.п. сверх ожидания")
+        ax.set_title("Апсеты сверх ожидаемого по Эло, скользящие 200 матчей · синие полосы — ретроградный Меркурий")
+        fig.tight_layout()
+        fig.savefig(out / "timeline.png", dpi=150)
+        plt.close(fig)
     # 6. players: ADR by Sun sign with the chance band
     if agg is not None and len(agg):
         fig, axs = plt.subplots(1, 2, figsize=(11, 3.8))
@@ -890,7 +920,17 @@ def main():
     real = real_effects(matches)
     log("реальные эффекты: " + json.dumps({k: v for k, v in real.items() if isinstance(v, dict)}, ensure_ascii=False)[:1500])
     power = {} if a.no_power else power_check(days, astro, matches, start, end, log)
-    cyc, cyc_plot = cycles(Y, W, dd)
+    cyc, cyc_plot = cycles({"upset": dd["upset"]}, W, dd)
+    # sensitivity: the plain daily upset share (not relative to Elo) as the outcome — a separate family
+    raw_days = days.copy()
+    raw_days["upset"] = raw_days["upset_raw"]
+    sres, *_ = match_tests(raw_days, astro, log)
+    sres = [r for r in sres if r["outcome"] == "upset"]
+    sq = bh([r["p"] for r in sres])
+    summ["sensitivity_raw_upset"] = {"tests": len(sres), "raw_p05": int(sum(r["p"] < 0.05 for r in sres)), "fdr_q10": int(sum(x < 0.1 for x in sq)),
+                                     "replicated": int(sum(r["replicates"] for r in sres)),
+                                     "fdr_and_replicated": int(sum(x < 0.1 and r["replicates"] for r, x in zip(sres, sq)))}
+    log(f"чувствительность (сырая доля апсетов): {summ['sensitivity_raw_upset']}")
     log("циклы: " + json.dumps(cyc, ensure_ascii=False)[:800])
     # players
     between = within = None
@@ -916,7 +956,7 @@ def main():
         "log": logs,
     }
     (out / "results.json").write_text(json.dumps(result, ensure_ascii=False, indent=1, default=str))
-    plots(out, res, real, cyc_plot, dd, Y, W, between, agg, band, dist, within)
+    plots(out, res, real, cyc_plot, dd, Y, W, between, agg, band, dist, within, matches)
     log(f"готово → {out}")
 
 

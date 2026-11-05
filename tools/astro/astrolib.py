@@ -5,7 +5,9 @@ astro_table(start, end) — таблица астрофакторов на ка�
   asp_<A>_<B>_<angle> (точные мажорные аспекты, орбис 1.5°), hard_aspects, tense_day, eclipse.
 natal_longitudes(date) — долготы планет на дату рождения (полдень UTC, время рождения обычно неизвестно).
 shift_test(y, f[, w=веса]) — разница средних «дни с фактором − остальные» и p-значение по циклическим сдвигам
-  (с весами — взвешенные средние, например по числу матчей в день).
+  (с весами — взвешенные средние, например по числу матчей в день; статистика стьюдентизирована по числу событий,
+  перебираются все допустимые сдвиги, p — гауссов хвост z = t / sd(сдвиги), p_shift — доля сдвигов не слабее наблюдаемого;
+  без весов — прежнее поведение, 2000 случайных сдвигов).
 bh(p) — поправка Бенджамини–Хохберга.
 Дни считаются от 2013-01-01, как во всех данных сайта.
 """
@@ -159,6 +161,8 @@ def shift_test(y: np.ndarray, f: np.ndarray, n_perm=2000, min_shift=30, rng=None
 
 
 def _shift_test_w(y, f, w, n_perm, min_shift, rng, min_days):
+    """weighted version: the statistic is studentized — diff / √(1/N₁ + 1/N₀), N = total weight (events) on factor /
+    other days — so that shifts landing on busy or quiet days do not widen or narrow the null; p from |t|"""
     ok = ~np.isnan(y) & (np.asarray(w) > 0)
     y, f, w = np.asarray(y, float)[ok], np.asarray(f)[ok].astype(bool), np.asarray(w, float)[ok]
     n = len(y)
@@ -173,13 +177,23 @@ def _shift_test_w(y, f, w, n_perm, min_shift, rng, min_days):
     tot_a, tot_w = a.sum(), w.sum()
     with np.errstate(divide="ignore", invalid="ignore"):
         diff_all = s1 / n1 - (tot_a - s1) / (tot_w - n1)
-    obs = float(a[f].sum() / w[f].sum() - a[~f].sum() / w[~f].sum())
-    rng = rng or np.random.default_rng(1)
-    shifts = rng.integers(min_shift, n - min_shift, n_perm)
-    null = diff_all[shifts]
+        t_all = diff_all / np.sqrt(1 / n1 + 1 / (tot_w - n1))
+    W1, W0 = w[f].sum(), w[~f].sum()
+    obs = float(a[f].sum() / W1 - a[~f].sum() / W0)
+    se_obs = math.sqrt(1 / W1 + 1 / W0)
+    t_obs = obs / se_obs
+    # every admissible shift once (the FFT gives them all): sampling 2000 shifts with replacement from ~n of them
+    # would put the p-value floor at 1/2001 although the observed arrangement is only one of ~n
+    null = t_all[min_shift:n - min_shift + 1]
     null = null[np.isfinite(null)]
-    p = (np.sum(np.abs(null) >= abs(obs)) + 1) / (len(null) + 1)
-    return {"diff": obs, "p": float(p), "days": k, "events": float(w[f].sum()), "null_sd": float(null.std()), "mde": float(2.8 * null.std())}
+    p_exact = (np.sum(np.abs(null) >= abs(t_obs)) + 1) / (len(null) + 1)
+    # a shift test cannot go below 1/(number of shifts) ≈ 1e-3, while FDR over hundreds of tests needs smaller p:
+    # Gaussian tail of the studentized statistic, scaled by the spread of the shift null (keeps autocorrelation)
+    z = t_obs / null.std()
+    p_gauss = math.erfc(abs(z) / math.sqrt(2))
+    sd = float(null.std() * se_obs)  # spread of the difference under the null, at the observed weights
+    return {"diff": obs, "p": float(p_gauss), "p_shift": float(p_exact), "z": float(z), "days": k, "events": float(W1),
+            "shifts": int(len(null)), "null_sd": sd, "mde": 2.8 * sd}
 
 
 def bh(pvals: list[float]) -> list[float]:
