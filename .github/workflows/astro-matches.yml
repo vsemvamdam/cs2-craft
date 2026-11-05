@@ -59,3 +59,7 @@ jobs:
         run: |
           python3 tools/astro/transits_astro.py --players store/nades-site/players --pl store/matches-hist/players.json --out store/astro-transits
           scripts/store.sh push astro-transits
+      - name: Джйотиш (прашна и мухурта)
+        run: |
+          python3 tools/astro/jyotish_matches.py --hist store/matches-hist --out store/astro-jyotish
+          scripts/store.sh push astro-jyotish
