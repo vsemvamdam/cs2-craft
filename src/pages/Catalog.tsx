@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { SkinCard, Spinner, NoPricesNotice, Updated } from '../components/ui';
-import { norm } from '../components/Layout';
+import { norm, skinText } from '../components/Layout';
 import { useDB, usePrices } from '../lib/hooks';
 import { CATEGORIES, RARITIES, plural } from '../lib/labels';
 import { priceRange, usePrefs } from '../lib/prefs';
@@ -46,7 +46,7 @@ export default function Catalog() {
       if (col && !s.col.includes(col) && !(db.colById.get(col)?.gold || []).some((id) => db.alias.get(id) === s)) return false;
       if (st && !s.st) return false;
       if (sv && !s.sv) return false;
-      if (words.length) { const n = norm(s.name); if (!words.every((w) => n.includes(w))) return false; }
+      if (words.length) { const n = skinText(s); if (!words.every((w) => n.includes(w))) return false; }
       return true;
     });
     const pr = (s: (typeof out)[0]) => priceRange(prices, s, source)?.[0] ?? null;
@@ -76,7 +76,7 @@ export default function Catalog() {
         <aside className="filters">
           <div>
             <h4>Поиск</h4>
-            <input className="input" style={{ width: '100%' }} placeholder="AK-47 Redline, Karambit…" value={q} onChange={(e) => setQuery({ q: e.target.value })} />
+            <input className="input" style={{ width: '100%' }} placeholder="AK-47 Redline, Керамбит…" value={q} onChange={(e) => setQuery({ q: e.target.value })} />
           </div>
           <div>
             <h4>Тип</h4>

@@ -55,7 +55,7 @@ npm test              # проверка математики контракто
 
 ## Источники и лицензии
 
-- База предметов: ByMykel/CSGO-API (MIT). Изображения — CDN Steam, © Valve.
+- База предметов: ByMykel/CSGO-API (MIT); официальные русские названия — из файлов игры через ByMykel/counter-strike-file-tracker (MIT). Изображения — CDN Steam, © Valve.
 - Кодирование прицелов: [csgo-sharecode](https://github.com/akiver/csgo-sharecode) (MIT).
 - Формат inspect-ссылок — по описанию [cs2-inspect-create](https://github.com/candyboyz/cs2-inspect-create) (MIT), своя реализация в `src/lib/inspect.ts`.
 - Графики: [Lightweight Charts](https://github.com/tradingview/lightweight-charts) (Apache-2.0).

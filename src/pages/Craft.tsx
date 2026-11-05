@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Price, Spinner, rarityColor } from '../components/ui';
-import { norm } from '../components/Layout';
+import { norm, skinText } from '../components/Layout';
 import { imgUrl, loadCharms, loadStickers, type Charm, type Indexed, type Prices, type Skin, type Sticker } from '../lib/data';
 import { copy, toast, useAsync, useDB, useDebounced, useLocal, usePrices } from '../lib/hooks';
 import { STICKER_EFFECTS, STICKER_RARITY, WEARS } from '../lib/labels';
@@ -304,7 +304,7 @@ function SkinChooser({ db, skin, onPick }: { db: Indexed; skin: Skin; onPick: (s
   const list = useMemo(() => {
     const words = norm(dq).split(' ').filter(Boolean);
     if (!words.length) return [];
-    return db.skins.filter((s) => !s.gold && s.cat !== 'equipment' && words.every((w) => norm(s.name).includes(w))).slice(0, 30);
+    return db.skins.filter((s) => !s.gold && s.cat !== 'equipment' && words.every((w) => skinText(s).includes(w))).slice(0, 30);
   }, [db, dq]);
   return (
     <div className="card pad row" style={{ position: 'relative', gap: 12 }}>

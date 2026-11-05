@@ -42,7 +42,7 @@ export function SkinCard({ s, prices, to, onClick, extra }: { s: Skin; prices: P
             {s.sv ? <span className="badge sv">SV</span> : null}
           </span>
         </div>
-        <div className="fin" title={s.name}>{fin || (s.vanilla ? 'Ванильный' : wpn)}</div>
+        <div className="fin" title={s.ru ? `${s.name}\n${s.ru}` : s.name}>{fin || (s.vanilla ? 'Ванильный' : wpn)}</div>
         <div className="price muted">
           {range ? (range[0] === range[1] ? money(range[0], prices, currency) : `${money(range[0], prices, currency, { compact: true })} – ${money(range[1], prices, currency, { compact: true })}`) : '—'}
         </div>

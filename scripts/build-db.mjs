@@ -74,8 +74,42 @@ function marketName({ name, gold, st, sv, wear, vanilla }) {
   return `${star}${prefix}${base}${wearPart}`;
 }
 
+/** Official Russian names from the game files (ByMykel/counter-strike-file-tracker, MIT). */
+async function loadRussian() {
+  const TRACKER = 'https://raw.githubusercontent.com/ByMykel/counter-strike-file-tracker/main/static/';
+  try {
+    const get = async (f) => {
+      if (SRC) { try { return JSON.parse(await fs.readFile(path.join(SRC, f), 'utf8')); } catch {} }
+      const r = await fetch(TRACKER + f);
+      if (!r.ok) throw new Error(f + ' ' + r.status);
+      return r.json();
+    };
+    const [ru, ig] = await Promise.all([get('csgo_russian.json'), get('items_game.json')]);
+    const tokens = new Map();
+    for (const [k, v] of Object.entries(ru.lang?.Tokens || {})) if (typeof v === 'string') tokens.set(k.toLowerCase(), v);
+    const t = (key) => (key ? tokens.get(String(key).replace(/^#/, '').toLowerCase()) : undefined);
+    const g = ig.items_game || ig;
+    const paint = (pi) => t(g.paint_kits?.[String(pi)]?.description_tag);
+    const itemName = (wid) => {
+      let it = g.items?.[String(wid)];
+      for (let depth = 0; it && depth < 6; depth++) {
+        if (it.item_name) return t(it.item_name);
+        const pf = String(it.prefab || '').split(' ')[0];
+        it = pf ? g.prefabs?.[pf] : null;
+      }
+      return undefined;
+    };
+    console.log(`russian names: ${tokens.size} strings`);
+    return { paint, itemName };
+  } catch (e) {
+    console.warn('russian names unavailable:', e.message);
+    return null;
+  }
+}
+
 async function main() {
   const [skins, ng, collections, crates, stickers, charms] = await Promise.all(FILES.map(load));
+  const RU = await loadRussian();
   console.log(`loaded: skins ${skins.length}, variants ${ng.length}, collections ${collections.length}, crates ${crates.length}, stickers ${stickers.length}, charms ${charms.length}`);
 
   // ---- skins (merge Doppler phases into one entry) ----
@@ -107,6 +141,12 @@ async function main() {
       pi: s.paint_index ? Number(s.paint_index) : 0,
       team: s.team?.id || 'both',
     };
+    if (RU) {
+      const w = RU.itemName(rec.wid) || rec.wpn;
+      const f = s.paint_index && !vanilla ? RU.paint(s.paint_index) : undefined;
+      const ruName = (gold ? '★ ' : '') + w + (f ? ` | ${f}` : '');
+      if (ruName !== rec.name) rec.ru = ruName;
+    }
     if (vanilla) rec.vanilla = 1;
     if (s.legacy_model) rec.legacy = 1;
     if (s.special_notes?.length) rec.notes = s.special_notes.map((n) => n.text);

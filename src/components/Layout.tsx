@@ -15,8 +15,11 @@ const NAV = [
   { to: '/collections', label: 'Коллекции' },
 ];
 
+/** searchable text of a skin: English market name + official Russian name */
+export const skinText = (s: { name: string; ru?: string }) => norm(s.name + ' ' + (s.ru || ''));
+
 export function norm(s: string) {
-  return s.toLowerCase().replace(/[★™|()\-]/g, ' ').replace(/\s+/g, ' ').trim();
+  return s.toLowerCase().replace(/ё/g, 'е').replace(/[★™|()\-]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function Search() {
@@ -30,8 +33,8 @@ function Search() {
     const words = norm(q).split(' ');
     const out: { to: string; title: string; sub: string; img: string; color: string }[] = [];
     for (const s of db.skins) {
-      const n = norm(s.name);
-      if (words.every((w) => n.includes(w))) out.push({ to: `/skin/${s.id}`, title: s.name, sub: RARITIES[s.rar]?.ru || '', img: imgUrl(s.img, 96), color: RARITIES[s.rar]?.color });
+      const n = skinText(s);
+      if (words.every((w) => n.includes(w))) out.push({ to: `/skin/${s.id}`, title: s.name, sub: (s.ru ? s.ru + ' · ' : '') + (RARITIES[s.rar]?.ru || ''), img: imgUrl(s.img, 96), color: RARITIES[s.rar]?.color });
       if (out.length > 40) break;
     }
     for (const c of db.collections) {
@@ -50,7 +53,7 @@ function Search() {
       <input
         className="input"
         style={{ width: '100%' }}
-        placeholder="Поиск скина или коллекции…"
+        placeholder="Поиск: Redline, Керамбит…"
         value={q}
         onChange={(e) => { setQ(e.target.value); setOpen(true); setSel(0); }}
         onFocus={() => setOpen(true)}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Price, Spinner, NoPricesNotice, Updated, rarityColor } from '../components/ui';
-import { norm } from '../components/Layout';
+import { norm, skinText } from '../components/Layout';
 import { imgUrl, type Indexed, type Prices, type Skin } from '../lib/data';
 import { copy, useDB, useDebounced, useLocal, usePrices } from '../lib/hooks';
 import { PHASE_RU, RARITIES, WEARS, rarityName, wearOf } from '../lib/labels';
@@ -243,7 +243,7 @@ function Picker({ db, prices, cfg, rarity, onAdd, onClose }: { db: Indexed; pric
       if (cfg.st && !s.st) return false;
       if (col && !s.col.includes(col)) return false;
       if (!poolFor(db, s, cfg.mode, cfg.st).pool.length) return false;
-      if (words.length) { const nm = norm(s.name); if (!words.every((w) => nm.includes(w))) return false; }
+      if (words.length) { const nm = skinText(s); if (!words.every((w) => nm.includes(w))) return false; }
       return true;
     });
     const price = (s: Skin) => skinPrice(prices, s, flag, wearOf(Math.min(s.mx, Math.max(s.mn, fl))), source);

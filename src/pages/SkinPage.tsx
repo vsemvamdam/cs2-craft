@@ -133,6 +133,7 @@ export default function SkinPage({ id }: { id: string }) {
           <div className="card pad stack" style={{ gap: 10 }}>
             <div className="muted">{skin.gold ? '★ ' : ''}{wpn} · {CATEGORIES[skin.cat] || ''}</div>
             <h1>{fin || 'Ванильный'}{skin.phases ? <span className="muted" style={{ fontWeight: 500 }}> · {PHASE_RU[phase] || phase}</span> : null}</h1>
+            {skin.ru && <div className="muted">{skin.ru}</div>}
             <div className="row" style={{ gap: 14 }}>
               <span style={{ color: rarityColor(skin), fontWeight: 600 }}><RarityTag rar={skin.rar} cat={skin.cat} /></span>
               <span className="muted small num">Флоат {skin.mn.toFixed(2)}–{skin.mx.toFixed(2)}</span>

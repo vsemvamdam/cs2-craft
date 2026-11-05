@@ -2,6 +2,8 @@
 export type Skin = {
   id: string;
   name: string; // "AK-47 | Redline", "★ Karambit | Fade", "★ Karambit"
+  /** official Russian name, when different */
+  ru?: string;
   wpn: string;
   wid: number;
   fin: string;
