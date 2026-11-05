@@ -37,7 +37,8 @@ PLACES = RAW / "_places"  # aggregated callout samples per map (raw files are st
 SEED = Path(__file__).resolve().parent / "seed"  # first demos committed to git (old format), merged into RAW
 FROM_R, LAND_R, CELL = 56.0, 96.0, 64.0
 TARGET_R = 128.0
-MAX_EX = 40
+MAX_EX = 12          # examples listed in the map file (all of a lineup's players/matches are in pp/ms)
+MIN_N = 3            # a throw seen fewer times is situational, not a lineup
 MAX_DETAIL = 30
 RAW_VERSION = 3
 PLACE_CELL = 64.0
@@ -276,7 +277,7 @@ def build(out_dir: Path, keep_single=False):
         details = defaultdict(dict)
         for c in clusters:
             n = len(c.items)
-            if n < 2 and not keep_single:
+            if n < MIN_N and not keep_single:
                 continue
             # representative: prefer throws with a 3D trajectory, then the one closest to the cluster centre
             rep = min(c.items, key=lambda r: (0 if (r["traj"] and len(r["traj"][0]) >= 3) else 1,
@@ -285,7 +286,8 @@ def build(out_dir: Path, keep_single=False):
             btns = Counter(r["btn"] for r in c.items if r["btn"])
             durs = sorted(r["dur"] for r in c.items if r["dur"])
             times = sorted(r["time"] for r in c.items)
-            ex = sorted(c.items, key=lambda r: (-r["m"], r["round"]))[:MAX_EX]
+            ex_all = sorted(c.items, key=lambda r: (-r["m"], r["round"]))
+            ex = ex_all[:MAX_EX]
             lid = hashlib.sha1(f"{mp}|{c.type}|{c.side}|{round(rep['fx'])}|{round(rep['fy'])}|{round(rep['lx'])}|{round(rep['ly'])}".encode()).hexdigest()[:10]
             pf = Counter(r["pf"] for r in c.items if r["pf"]).most_common(1)
             pf = pf[0][0] if pf else (grid.lookup(rep["fx"], rep["fy"], rep["fz"], maj) if maj else "")
@@ -297,9 +299,10 @@ def build(out_dir: Path, keep_single=False):
                 "move": moves.most_common(1)[0][0], "moves": dict(moves),
                 "btn": btns.most_common(1)[0][0] if btns else "", "dur": durs[len(durs) // 2] if durs else 0,
                 "time": times[len(times) // 2], "traj": rep["traj"], "ex": [[r["p"], r["m"], r["round"]] for r in ex],
+                "pp": sorted({r["p"] for r in c.items}), "ms": sorted({r["m"] for r in c.items}),
             })
             details[lid[0]][lid] = [[r["p"], r["m"], r["round"], r["time"], r["move"], r["btn"], r["fx"], r["fy"], r["fz"],
-                                     r["pitch"], r["yaw"], r["lx"], r["ly"], r["lz"], r["dur"], r["traj"]] for r in ex[:MAX_DETAIL]]
+                                     r["pitch"], r["yaw"], r["lx"], r["ly"], r["lz"], r["dur"], r["traj"]] for r in ex_all[:MAX_DETAIL]]
         lineups.sort(key=lambda l: -l["n"])
         # targets: lineups of one type landing in (almost) the same spot, from any position/side
         targets = []

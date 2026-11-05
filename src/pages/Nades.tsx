@@ -16,7 +16,8 @@ type Lineup = {
   id: string; type: string; side: 'T' | 'CT'; n: number; np: number;
   from: [number, number, number]; ang: [number, number]; land: [number, number, number];
   move: string; moves: Record<string, number>; time: number; traj: number[][];
-  ex: [number, number, number][]; // [player, match, round]
+  ex: [number, number, number][]; // [player, match, round] — latest few
+  pp?: number[]; ms?: number[]; // all players / matches of the lineup (v3)
   t?: number; pf?: string; pl?: string; btn?: string; dur?: number;
 };
 type Target = [string, number, number, number, string, number]; // type, x, y, z, place, n
@@ -149,7 +150,7 @@ function MapView({ m, maps }: { m: MapInfo; maps: MapInfo[] }) {
   const player = query.get('player') || '';
   const event = query.get('event') || '';
   const tab = query.get('tab') || 'all';
-  const min = +(query.get('min') || 2);
+  const min = +(query.get('min') || 3);
   const tg = query.get('tg') === null ? -1 : +query.get('tg')!;
   const sel = query.get('id') || '';
   const d = data.data;
@@ -159,7 +160,7 @@ function MapView({ m, maps }: { m: MapInfo; maps: MapInfo[] }) {
   const players = useMemo(() => {
     if (!d) return [];
     const c = new Map<number, number>();
-    for (const l of d.lineups) for (const p of new Set(l.ex.map((e) => e[0]))) c.set(p, (c.get(p) || 0) + 1);
+    for (const l of d.lineups) for (const p of new Set(l.pp || l.ex.map((e) => e[0]))) c.set(p, (c.get(p) || 0) + 1);
     const byName = new Map<string, { name: string; team: string; n: number }>();
     for (const [i, n] of c) {
       const [name, team] = d.players[i];
@@ -174,8 +175,8 @@ function MapView({ m, maps }: { m: MapInfo; maps: MapInfo[] }) {
     const pIdx = new Set(player ? d.players.map((p, i) => (p[0] === player ? i : -1)).filter((i) => i >= 0) : []);
     return d.lineups.filter((l) => {
       if (side && l.side !== side) return false;
-      if (pIdx.size && !l.ex.some((e) => pIdx.has(e[0]))) return false;
-      if (event && !l.ex.some((e) => d.matches[e[1]][1] === event)) return false;
+      if (pIdx.size && !(l.pp || l.ex.map((e) => e[0])).some((p) => pIdx.has(p))) return false;
+      if (event && !(l.ms || l.ex.map((e) => e[1])).some((m) => d.matches[m][1] === event)) return false;
       if (tab === 'fav' && !favs.has(l.id)) return false;
       if (!pIdx.size && tab !== 'fav' && l.n < min) return false;
       return true;
@@ -256,7 +257,7 @@ function MapView({ m, maps }: { m: MapInfo; maps: MapInfo[] }) {
               {!player && tab !== 'fav' && (
                 <label className="row small muted" style={{ gap: 6 }}>Популярность от
                   <select className="select small" value={min} onChange={(e) => setQuery({ min: e.target.value })}>
-                    {[2, 3, 5, 10, 20, 50].map((n) => <option key={n} value={n}>{n}</option>)}
+                    {[3, 5, 10, 20, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
                   </select>бросков
                 </label>
               )}

@@ -83,7 +83,8 @@ jobs:
 
   aggregate:
     needs: [plan, shard]
-    if: always() && needs.plan.outputs.count != '0'
+    # new demos parsed, or the library builder changed (push) — rebuild the site data
+    if: always() && (needs.plan.outputs.count != '0' || github.event_name == 'push')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -94,6 +95,7 @@ jobs:
         with:
           python-version: '3.12'
       - uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           pattern: raw-*
           path: store/nades-raw-new
