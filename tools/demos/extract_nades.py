@@ -76,8 +76,10 @@ DETONATE_EVENTS = {
 PLAYER_PROPS = [
     "X", "Y", "Z", "pitch", "yaw",
     "velocity_X", "velocity_Y", "velocity_Z",
-    "duck_amount", "is_walking", "is_airborne", "team_num", "team_clan_name",
+    "duck_amount", "is_walking", "is_airborne", "team_num", "team_clan_name", "last_place_name",
 ]
+GRENADE_SPEED = 675.0  # 750 * 0.9: launch speed of a full (left-click) throw
+PLACE_CELL = 64.0      # grid for player-position → callout samples
 
 
 def log(*a):
@@ -180,7 +182,7 @@ def extract_demo(dem: Path, meta: dict, include_warmup=False, players=None, keep
         "weapon_fire", player=PLAYER_PROPS,
         other=["total_rounds_played", "is_warmup_period", "is_freeze_period"])
     if wf is None or not len(wf):
-        return map_name, []
+        return map_name, [], {}
     wf = wf[wf["weapon"].isin(WEAPON_TYPE.keys())].copy()
     if not include_warmup and "is_warmup_period" in wf.columns:
         wf = wf[~wf["is_warmup_period"].fillna(False).astype(bool)]
@@ -191,7 +193,7 @@ def extract_demo(dem: Path, meta: dict, include_warmup=False, players=None, keep
         low = {p.lower() for p in players}
         wf = wf[wf["user_name"].str.lower().isin(low) | wf["sid"].isin(players)]
     if not len(wf):
-        return map_name, []
+        return map_name, [], {}
 
     # ---- projectiles ----------------------------------------------------- #
     g = parser.parse_grenades()
@@ -323,12 +325,15 @@ def extract_demo(dem: Path, meta: dict, include_warmup=False, players=None, keep
             stats["no_land"] += 1
             continue
 
-        # trajectory (cut at detonation / rest point)
+        # trajectory (cut at detonation / rest point); points are 1 tick apart → uniform in time
         traj = []
+        dur = None
+        btn = ""
         if seg is not None:
             mask = seg["ticks"] <= (end_tick if end_tick is not None else seg["t1"])
             pts = seg["xyz"][mask]
             traj = downsample([[r1(p[0]), r1(p[1]), r1(p[2])] for p in pts])
+            dur = round(max(len(pts) - 1, 0) / TICKRATE, 2)
 
         # movement
         vx, vy, vz = fnum(r.get("user_velocity_X")), fnum(r.get("user_velocity_Y")), fnum(r.get("user_velocity_Z"))
@@ -347,6 +352,17 @@ def extract_demo(dem: Path, meta: dict, include_warmup=False, players=None, keep
         if rel_state:
             duck = max(duck, rel_state[2]) if not jump_signal else duck
         move = classify_move(speed, vz, airborne, duck, bval(r.get("user_is_walking")), jump_signal)
+
+        # throw button from the launch speed: vel = forward * 675 * lerp(strength, 0.3, 1) + 1.25 * player_vel
+        # (strength 1 = left click, 0.5 = both buttons, 0 = right click)
+        if seg is not None and len(seg["xyz"]) >= 3:
+            xyz, tks = seg["xyz"], seg["ticks"]
+            dtk = max(int(tks[2] - tks[1]), 1)
+            gv = [(xyz[2][i] - xyz[1][i]) * TICKRATE / dtk for i in range(3)]
+            pvz = rel_state[1] if rel_state else vz
+            tv = (gv[0] - 1.25 * vx, gv[1] - 1.25 * vy, gv[2] - 1.25 * pvz)
+            k = math.sqrt(sum(c * c for c in tv)) / GRENADE_SPEED
+            btn = "L" if k > 0.83 else "LR" if k > 0.49 else "R"
 
         # Angles: the view angles at the release tick are what the game uses for the
         # launch vector (verified: median yaw error 0.04° vs 0.17° at weapon_fire tick).
@@ -387,6 +403,9 @@ def extract_demo(dem: Path, meta: dict, include_warmup=False, players=None, keep
             "land": {"x": r1(land[0]), "y": r1(land[1]), "z": r1(land[2])},
             "traj": traj,
             "move": move,
+            "btn": btn,
+            "dur": dur,
+            "place": str(r.get("user_last_place_name") or "") if not isinstance(r.get("user_last_place_name"), float) else "",
             "speed": r1(speed),
             "event": meta.get("event") or "",
             "match": meta.get("match") or "",
@@ -398,13 +417,105 @@ def extract_demo(dem: Path, meta: dict, include_warmup=False, players=None, keep
     skipped = {k: v for k, v in stats.items() if v}
     if skipped:
         log(f"  пропущено/без снаряда: {skipped}")
-    return map_name, throws
+    extras = {}
+    try:
+        extras["places"] = place_samples(parser, match_start)
+    except Exception as e:  # noqa: BLE001
+        log(f"  ! позиции/коллауты не собраны: {e}")
+    try:
+        extras["players"] = player_stats(parser, match_start, freeze_ends)
+    except Exception as e:  # noqa: BLE001
+        log(f"  ! статистика игроков не собрана: {e}")
+    return map_name, throws, extras
+
+
+def place_samples(parser, match_start):
+    """player positions every 32 ticks → grid cells with the in-game callout (last_place_name).
+    Returns [[cx, cy, cz, place, n], ...] with cell = floor(coord / PLACE_CELL)."""
+    from collections import Counter
+
+    re_df = parser.parse_event("round_end")
+    last = int(re_df["tick"].max()) if re_df is not None and len(re_df) else match_start + 64 * 60 * 40
+    ticks = list(range(max(match_start, 1), last, 32))
+    df = parser.parse_ticks(["X", "Y", "Z", "last_place_name", "is_alive"], ticks=ticks)
+    cells = Counter()
+    for x, y, z, pl, alive in zip(df["X"], df["Y"], df["Z"], df["last_place_name"], df["is_alive"]):
+        if not isinstance(pl, str) or not pl or not bval(alive):
+            continue
+        try:
+            key = (math.floor(x / PLACE_CELL), math.floor(y / PLACE_CELL), math.floor(z / PLACE_CELL), pl)
+        except (TypeError, ValueError):
+            continue
+        cells[key] += 1
+    return [[a, b, c, pl, n] for (a, b, c, pl), n in cells.items()]
+
+
+def player_stats(parser, match_start, freeze_ends):
+    """per-player match stats + crosshair code from the demo"""
+    deaths = parser.parse_event("player_death", player=["team_num"], other=["total_rounds_played"])
+    hurt = parser.parse_event("player_hurt", player=["team_num"], other=["total_rounds_played"])
+    rounds_end = parser.parse_event("round_end")
+    if match_start:
+        deaths = deaths[deaths["tick"] >= match_start] if len(deaths) else deaths
+        hurt = hurt[hurt["tick"] >= match_start] if len(hurt) else hurt
+        rounds_end = rounds_end[rounds_end["tick"] >= match_start] if len(rounds_end) else rounds_end
+    n_rounds = len(rounds_end)
+    probe = int(rounds_end["tick"].iloc[len(rounds_end) // 2]) if n_rounds else match_start + 64 * 60
+    roster = parser.parse_ticks(["crosshair_code", "team_clan_name", "team_num"], ticks=[probe])
+    P = {}
+    for _, r in roster.iterrows():
+        sid = str(r["steamid"])
+        P[sid] = {"name": str(r["name"]), "sid": sid, "team": str(r.get("team_clan_name") or "").strip(),
+                  "xhair": str(r.get("crosshair_code") or ""), "k": 0, "d": 0, "a": 0, "hs": 0, "dmg": 0,
+                  "ud": 0, "fk": 0, "fd": 0, "fa": 0, "awp": 0, "rounds": n_rounds}
+
+    def st(sid):
+        return P.get(str(sid))
+    first_in_round = set()
+    for _, e in deaths.sort_values("tick").iterrows() if len(deaths) else []:
+        att, vic = str(e.get("attacker_steamid")), str(e.get("user_steamid"))
+        same = e.get("attacker_team_num") == e.get("user_team_num")
+        rnd = int(fnum(e.get("total_rounds_played"), 0))
+        if st(vic):
+            st(vic)["d"] += 1
+        if st(att) and att != vic and not same:
+            a = st(att)
+            a["k"] += 1
+            a["hs"] += 1 if bval(e.get("headshot")) else 0
+            a["awp"] += 1 if str(e.get("weapon")) == "awp" else 0
+            if rnd not in first_in_round:
+                first_in_round.add(rnd)
+                a["fk"] += 1
+                if st(vic):
+                    st(vic)["fd"] += 1
+        elif rnd not in first_in_round:
+            first_in_round.add(rnd)
+        ass = str(e.get("assister_steamid"))
+        if st(ass) and e.get("assister_team_num") != e.get("user_team_num"):
+            st(ass)["a"] += 1
+            if bval(e.get("assistedflash")):
+                st(ass)["fa"] += 1
+    hp = {}
+    cur_round = None
+    for _, e in hurt.sort_values("tick").iterrows() if len(hurt) else []:
+        rnd = int(fnum(e.get("total_rounds_played"), 0))
+        if rnd != cur_round:
+            hp, cur_round = {}, rnd
+        vic, att = str(e.get("user_steamid")), str(e.get("attacker_steamid"))
+        before = hp.get(vic, 100)
+        dmg = min(int(fnum(e.get("dmg_health"), 0)), before)
+        hp[vic] = max(before - dmg, 0)
+        if st(att) and att != vic and e.get("attacker_team_num") != e.get("user_team_num"):
+            st(att)["dmg"] += dmg
+            if str(e.get("weapon")) in ("hegrenade", "inferno", "molotov", "incgrenade"):
+                st(att)["ud"] += dmg
+    return [p for p in P.values() if p["team"] or p["k"] or p["d"]]
 
 
 # --------------------------------------------------------------------------- #
 # merge / write
 # --------------------------------------------------------------------------- #
-def merge_into(out_dir: Path, map_name: str, throws: list, replace_demo=True):
+def merge_into(out_dir: Path, map_name: str, throws: list, replace_demo=True, extras=None):
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{map_name}.json"
     data = {"map": map_name, "updated": None, "throws": []}
@@ -424,6 +535,7 @@ def merge_into(out_dir: Path, map_name: str, throws: list, replace_demo=True):
         "map": map_name,
         "updated": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),
         "throws": merged,
+        **(extras or {}),  # places / players of the last parsed demo (opencs2.py parses one demo per dir)
     }
     tmp = path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
@@ -650,8 +762,8 @@ def main(argv=None):
     for dem, meta in jobs:
         log(f"▶ {dem.name}")
         try:
-            map_name, throws = extract_demo(dem, meta, include_warmup=args.include_warmup,
-                                            players=players, keep_postround=args.keep_postround)
+            map_name, throws, extras = extract_demo(dem, meta, include_warmup=args.include_warmup,
+                                                    players=players, keep_postround=args.keep_postround)
         except Exception as e:  # noqa: BLE001
             log(f"  ! ошибка разбора: {e}")
             exit_code = 1
@@ -668,7 +780,7 @@ def main(argv=None):
         if not args.dry_run and throws:
             # full re-parse of a demo replaces its old throws; filtered runs only upsert by id
             path, n_total, n_new = merge_into(out_dir, map_name, throws,
-                                              replace_demo=not (players or types))
+                                              replace_demo=not (players or types), extras=extras)
             log(f"  → {path} (всего {n_total}, добавлено/обновлено {n_new})")
         totals.setdefault(map_name, {})
         for k, v in counts.items():

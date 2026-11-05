@@ -52,6 +52,10 @@ jobs:
         run: scripts/store.sh pull history
       - name: Данные для сайта
         run: node scripts/build-site-data.mjs
+      - name: Раскидки, коллауты и игроки из про-демок
+        run: |
+          scripts/store.sh pull nades-site
+          if [ -d store/nades-site ]; then cp -r store/nades-site/. public/data/; fi
       - name: Сборка
         run: npm test && npm run build
       - uses: actions/configure-pages@v5

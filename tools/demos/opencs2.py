@@ -24,10 +24,26 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
-from build_lineups import write_raw  # noqa: E402
+from build_lineups import RAW_VERSION, write_raw  # noqa: E402
 
 REPO = "blanchon/opencs2_dataset_demo"
-PROCESSED = HERE / "processed.json"
+# list of already parsed demos lives in the data-store release (store/nades-proc), not in git;
+# demos parsed by an older extractor (other "v") are parsed again
+PROCESSED = ROOT / "store" / "nades-proc" / "processed.json"
+
+
+def load_done() -> set:
+    if not PROCESSED.exists():
+        return set()
+    d = json.loads(PROCESSED.read_text())
+    if not isinstance(d, dict) or d.get("v") != RAW_VERSION:
+        return set()
+    return set(d.get("done", []))
+
+
+def save_done(done: set):
+    PROCESSED.parent.mkdir(parents=True, exist_ok=True)
+    PROCESSED.write_text(json.dumps({"v": RAW_VERSION, "done": sorted(done)}, ensure_ascii=False, indent=0))
 MAPS = ["mirage", "inferno", "nuke", "ancient", "anubis", "dust2", "cache", "overpass", "train", "vertigo"]
 ACTIVE = ["mirage", "inferno", "nuke", "ancient", "anubis", "dust2", "cache"]
 
@@ -66,7 +82,8 @@ def extract_to_raw(dem: Path, meta: dict, raw_dir: Path, name: str) -> int:
         for f in Path(out).glob("de_*.json"):
             d = json.loads(f.read_text(encoding="utf-8"))
             raw_dir.mkdir(parents=True, exist_ok=True)
-            write_raw(raw_dir / f"{name}.json", d["map"], {**{k: meta.get(k) or "" for k in ("event", "match", "date", "url")}, "demo": dem.name}, d["throws"])
+            write_raw(raw_dir / f"{name}.json", d["map"], {**{k: meta.get(k) or "" for k in ("event", "match", "date", "url")}, "demo": dem.name},
+                      d["throws"], places=d.get("places"), players=d.get("players"))
             total += len(d["throws"])
         return total
 
@@ -79,7 +96,7 @@ def cmd_plan(a):
     files = api.list_repo_files(REPO, repo_type="dataset")
     dems = {f.rsplit("/", 1)[-1]: f for f in files if f.endswith(".dem")}
     meta = pd.concat([pd.read_parquet(hf_hub_download(REPO, filename=p, repo_type="dataset")) for p in files if p.endswith(".parquet")], ignore_index=True)
-    done = set(json.loads(PROCESSED.read_text())) if PROCESSED.exists() else set()
+    done = load_done()
     items = []
     for _, r in meta.iterrows():
         fn = str(r.get("file_name") or "")
@@ -152,7 +169,8 @@ def cmd_ingest(a):
         jobs.append((Path(p), {}))
     for dem, meta in jobs:
         name = safe(dem.stem)
-        if (raw_dir / f"{name}.json").exists():
+        old = raw_dir / f"{name}.json"
+        if old.exists() and json.loads(old.read_text(encoding="utf-8")).get("rv") == RAW_VERSION:
             log(f"= {dem.name} уже в базе")
             continue
         try:
@@ -162,11 +180,22 @@ def cmd_ingest(a):
             log(f"! {dem.name}: {e}")
 
 
+def cmd_mark_done(a):
+    """aggregate step: add paths from shard logs (_done-*.txt) to the processed list"""
+    done = load_done()
+    for f in a.files:
+        done |= {l.strip() for l in Path(f).read_text().splitlines() if l.strip()}
+    save_done(done)
+    log(f"разобрано всего (формат v{RAW_VERSION}): {len(done)}")
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("plan"); p.add_argument("--limit", type=int, default=240); p.add_argument("--shards", type=int, default=12); p.add_argument("--out", default="plan.json")
     s = sub.add_parser("shard"); s.add_argument("--plan", required=True); s.add_argument("--index", type=int, required=True)
     i = sub.add_parser("ingest"); i.add_argument("--from-urls"); i.add_argument("inputs", nargs="*")
+    m = sub.add_parser("mark-done"); m.add_argument("files", nargs="*")
     a = ap.parse_args()
-    {"plan": cmd_plan, "shard": cmd_shard, "ingest": cmd_ingest}[a.cmd](a)
+    {"plan": cmd_plan, "shard": cmd_shard, "ingest": cmd_ingest, "mark-done": cmd_mark_done}[a.cmd](a)
+

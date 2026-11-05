@@ -1,22 +1,25 @@
 name: Раскидки — вся база про-демок
 
 # Разбирает весь открытый архив OpenCS2 (Hugging Face blanchon/opencs2_dataset_demo, CC BY 4.0,
-# ~2000 карт HLTV) порциями: каждый запуск — до LIMIT демок в SHARDS параллельных задачах.
-# Запускается каждые 2 часа, пока не разберёт всё; уже разобранное не трогает.
+# ~2000 карт HLTV) порциями: каждый запуск — до LIMIT демок в SHARDS параллельных задачах;
+# если что-то осталось, сразу запускает следующую порцию (и ещё раз каждые 2 часа по расписанию).
+# Уже разобранное текущей версией разборщика не трогает. Всё хранится в релизе data-store
+# (nades-raw — броски, nades-proc — список разобранного, nades-site — готовые данные для сайта),
+# в git ничего не коммитится.
 on:
   workflow_dispatch:
     inputs:
       limit:
         description: 'Сколько демок за запуск'
-        default: '320'
+        default: '600'
       shards:
         description: 'Параллельных задач'
-        default: '16'
+        default: '20'
   schedule:
     - cron: '7 */2 * * *'
   push:
     branches: [main]
-    paths: ['tools/demos/opencs2.py', '.github/workflows/nades-all.yml']
+    paths: ['tools/demos/opencs2.py', 'tools/demos/extract_nades.py', 'tools/demos/build_lineups.py', '.github/workflows/nades-all.yml']
 
 permissions:
   contents: write
@@ -34,14 +37,17 @@ jobs:
       count: ${{ steps.p.outputs.count }}
       matrix: ${{ steps.p.outputs.matrix }}
       remaining: ${{ steps.p.outputs.remaining }}
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - run: pip install huggingface_hub pandas pyarrow
+      - run: scripts/store.sh pull nades-proc
       - id: p
-        run: python3 tools/demos/opencs2.py plan --limit "${{ inputs.limit || '320' }}" --shards "${{ inputs.shards || '16' }}" --out plan.json
+        run: python3 tools/demos/opencs2.py plan --limit "${{ inputs.limit || '600' }}" --shards "${{ inputs.shards || '20' }}" --out plan.json
       - uses: actions/upload-artifact@v4
         with:
           name: plan
@@ -54,7 +60,7 @@ jobs:
     timeout-minutes: 300
     strategy:
       fail-fast: false
-      max-parallel: 16
+      max-parallel: 20
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
@@ -92,31 +98,26 @@ jobs:
           pattern: raw-*
           path: store/nades-raw-new
           merge-multiple: true
+      - run: pip install demoparser2
       - name: Объединить с базой бросков
         run: |
           scripts/store.sh pull nades-raw
+          scripts/store.sh pull nades-proc
           mkdir -p store/nades-raw
-          cat store/nades-raw-new/_done-*.txt > done.txt 2>/dev/null || touch done.txt
+          python3 tools/demos/opencs2.py mark-done store/nades-raw-new/_done-*.txt || python3 tools/demos/opencs2.py mark-done
           rm -f store/nades-raw-new/_done-*.txt
-          cp -n store/nades-raw-new/*.json store/nades-raw/ 2>/dev/null || true
-          python3 - <<'PY'
-          import json, pathlib
-          p = pathlib.Path('tools/demos/processed.json')
-          done = set(json.loads(p.read_text())) if p.exists() else set()
-          done |= {l.strip() for l in open('done.txt') if l.strip()}
-          p.write_text(json.dumps(sorted(done), ensure_ascii=False, indent=0))
-          print('разобрано всего', len(done))
-          PY
-      - name: Собрать раскидки
-        run: python3 tools/demos/build_lineups.py --seed-from-public
+          cp store/nades-raw-new/*.json store/nades-raw/ 2>/dev/null || true
+          # свои демки из tools/demos/urls.txt (разбираются один раз для каждой версии разборщика)
+          python3 tools/demos/opencs2.py ingest --from-urls tools/demos/urls.txt || true
+      - name: Собрать раскидки, коллауты и игроков
+        run: python3 tools/demos/build_lineups.py --out store/nades-site
       - name: Сохранить и пересобрать сайт
         run: |
           scripts/store.sh push nades-raw
-          git config user.name "nades-bot"
-          git config user.email "nades-bot@users.noreply.github.com"
-          git add public/data/nades/ tools/demos/processed.json
-          if git diff --cached --quiet; then echo "нет изменений"; exit 0; fi
-          git commit -m "Раскидки: +демки из OpenCS2 (осталось ${{ needs.plan.outputs.remaining }})"
-          git pull --rebase -q origin main
-          git push
+          scripts/store.sh push nades-proc
+          scripts/store.sh push nades-site
           gh workflow run site.yml -f quick=true
+          if [ "${{ needs.plan.outputs.remaining }}" != "0" ]; then
+            echo "осталось ${{ needs.plan.outputs.remaining }} демок — запускаю следующую порцию"
+            gh workflow run nades-all.yml
+          fi
