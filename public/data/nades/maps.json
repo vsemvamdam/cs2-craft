@@ -1,0 +1,74 @@
+{
+  "updated": "2026-11-05",
+  "radar_size": 1024,
+  "transform": "px = (x - pos_x) / scale ; py = (pos_y - y) / scale  (radar is radar_size x radar_size). For maps with 'lower': use lower.radar when z < lower.z_max (same pos_x/pos_y/scale).",
+  "sources": {
+    "overviews": "https://github.com/SteamDatabase/GameTracking-CS2/tree/master/game/csgo/pak01_dir/resource/overviews (commit 1a3016b, 2026-11-03)",
+    "radars": "https://github.com/MurkyYT/cs2-map-icons/tree/main/images/radars (hotlinked, 1024x1024 PNG, CORS *)",
+    "active_pool": "Valve, Premier Season 5 (2026-07-06/08): Cache replaced Overpass. Pool: Ancient, Anubis, Cache, Dust2, Inferno, Mirage, Nuke"
+  },
+  "maps": [
+    {
+      "id": "de_mirage", "name": "Mirage", "active": true,
+      "pos_x": -3230, "pos_y": 1713, "scale": 5.0,
+      "radar": "https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/radars/de_mirage_radar_psd.png"
+    },
+    {
+      "id": "de_inferno", "name": "Inferno", "active": true,
+      "pos_x": -2087, "pos_y": 3870, "scale": 4.9,
+      "radar": "https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/radars/de_inferno_radar_psd.png"
+    },
+    {
+      "id": "de_nuke", "name": "Nuke", "active": true,
+      "pos_x": -3453, "pos_y": 2887, "scale": 7.0,
+      "radar": "https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/radars/de_nuke_radar_psd.png",
+      "lower": {
+        "z_max": -495,
+        "radar": "https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/radars/de_nuke_lower_radar_psd.png"
+      }
+    },
+    {
+      "id": "de_ancient", "name": "Ancient", "active": true,
+      "pos_x": -2953, "pos_y": 2164, "scale": 5.0,
+      "radar": "https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/radars/de_ancient_radar_psd.png"
+    },
+    {
+      "id": "de_anubis", "name": "Anubis", "active": true,
+      "pos_x": -2796, "pos_y": 3328, "scale": 5.22,
+      "radar": "https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/radars/de_anubis_radar_psd.png"
+    },
+    {
+      "id": "de_dust2", "name": "Dust II", "active": true,
+      "pos_x": -2476, "pos_y": 3239, "scale": 4.4,
+      "radar": "https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/radars/de_dust2_radar_psd.png"
+    },
+    {
+      "id": "de_cache", "name": "Cache", "active": true,
+      "pos_x": -2000, "pos_y": 3250, "scale": 5.5,
+      "radar": "https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/radars/de_cache_radar_psd.png"
+    },
+    {
+      "id": "de_overpass", "name": "Overpass", "active": false,
+      "pos_x": -4831, "pos_y": 1781, "scale": 5.2,
+      "radar": "https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/radars/de_overpass_radar_psd.png"
+    },
+    {
+      "id": "de_train", "name": "Train", "active": false,
+      "pos_x": -2308, "pos_y": 2078, "scale": 4.082077,
+      "radar": "https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/radars/de_train_radar_psd.png",
+      "lower": {
+        "z_max": -50,
+        "radar": "https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/radars/de_train_lower_radar_psd.png"
+      }
+    },
+    {
+      "id": "de_vertigo", "name": "Vertigo", "active": false,
+      "pos_x": -3168, "pos_y": 1762, "scale": 4.0,
+      "radar": "https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/radars/de_vertigo_radar_psd.png",
+      "lower": {
+        "z_max": 11700,
+        "radar": "https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/radars/de_vertigo_lower_radar_psd.png"
+      }
+    }
+  ]
+}

@@ -88,8 +88,9 @@ export function skinPrice(prices: Prices | null, s: Skin, flag: Flag, wear: numb
   if (!prices) return null;
   const vk = s.vanilla ? vkey(flag, 'x') : vkey(flag, wear);
   if (phase) {
+    // Steam mixes all phases under one name, so a phase-specific price (Skinport) wins when known
     const p = prices.ph?.[s.id]?.[phase]?.[vk];
-    if (p && p[0] != null && source !== 'steam') return p[0];
+    if (p && (p[0] ?? p[2]) != null) return (p[0] ?? p[2]) as number;
   }
   return pick(prices.s[s.id]?.[vk], source);
 }

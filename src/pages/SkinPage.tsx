@@ -38,6 +38,7 @@ export default function SkinPage({ id }: { id: string }) {
     return db.skins.filter((x) => x.wpn === skin.wpn && x !== skin).slice(0, 24);
   }, [db, skin]);
 
+  const sameFinish = useMemo(() => (db && skin && skin.fin && skin.fin !== 'Vanilla' ? db.skins.filter((x) => x.fin === skin.fin && x !== skin).sort((a, b) => Number(b.gold) - Number(a.gold) || a.wpn.localeCompare(b.wpn)).slice(0, 18) : []), [db, skin]);
   if (!db) return <Spinner />;
   if (!skin) return <div className="empty">Скин не найден. <a className="link" href="#/skins">К каталогу</a></div>;
 
@@ -209,6 +210,12 @@ export default function SkinPage({ id }: { id: string }) {
         <PriceChart hist={hist} vk={vk} prices={prices} />
       </div>
 
+      {sameFinish.length > 0 && (
+        <div className="stack">
+          <div className="section-title"><h2>«{skin.fin}» на другом оружии</h2><span className="small muted">{sameFinish.length}</span></div>
+          <div className="skin-grid">{sameFinish.map((s) => <SkinCard key={s.id} s={s} prices={prices} />)}</div>
+        </div>
+      )}
       {related.length > 0 && (
         <div className="stack">
           <div className="section-title"><h2>{cols[0] ? cols[0]!.name : `Другие ${skin.wpn}`}</h2>{cols[0] && <a className="link small" href={href(`/collection/${cols[0]!.id}`)}>Вся коллекция →</a>}</div>

@@ -46,7 +46,7 @@ function Search() {
   }, []);
   const go = (to: string) => { navigate(to); setOpen(false); setQ(''); };
   return (
-    <div ref={box} style={{ position: 'relative', width: 'min(260px, 30vw)' }}>
+    <div ref={box} className="header-search" style={{ position: 'relative', width: 'min(260px, 30vw)' }}>
       <input
         className="input"
         style={{ width: '100%' }}
@@ -97,6 +97,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </nav>
           <div className="header-tools">
             <Search />
+            <a className="btn icon search-btn" href="#/skins" aria-label="Поиск">🔍</a>
             <select className="select" value={prefs.currency} onChange={(e) => setPrefs({ currency: e.target.value as Currency })} aria-label="Валюта" title="Валюта">
               <option value="RUB">₽ RUB</option>
               <option value="USD">$ USD</option>
