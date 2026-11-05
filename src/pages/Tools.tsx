@@ -1,10 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { crosshairToConVars, decodeCrosshairShareCode, encodeCrosshair, type Crosshair, type CrosshairV1 } from 'csgo-sharecode';
+import { useEffect, useState } from 'react';
 import { copy, useLocal } from '../lib/hooks';
-import { setQuery, useRoute } from '../lib/router';
+import { href, navigate, setQuery, useRoute } from '../lib/router';
 
 const TABS = [
-  { k: 'crosshair', ru: 'Прицел' },
   { k: 'sens', ru: 'Сенса и eDPI' },
   { k: 'viewmodel', ru: 'Viewmodel' },
   { k: 'practice', ru: 'Конфиг для тренировки' },
@@ -14,15 +12,22 @@ const TABS = [
 
 export default function Tools() {
   const { query } = useRoute();
-  const tab = query.get('t') || 'crosshair';
+  const tab = query.get('t') || 'sens';
+  // the crosshair tool moved to its own page; keep old #/tools?t=crosshair links working
+  useEffect(() => {
+    if (tab === 'crosshair') navigate('/crosshair' + (query.get('c') ? '?c=' + encodeURIComponent(query.get('c')!) : ''), true);
+  }, [tab]);
   return (
     <div className="stack" style={{ gap: 16 }}>
       <div className="stack" style={{ gap: 6 }}>
         <h1>Утилиты CS2</h1>
-        <p className="muted">Прицел нового формата, перевод сенсы, viewmodel, конфиги и бинды — всё работает прямо в браузере.</p>
+        <p className="muted">Перевод сенсы, viewmodel, конфиги и бинды — всё работает прямо в браузере.</p>
       </div>
+      <a className="feature" href={href('/crosshair')}>
+        <span className="row" style={{ gap: 10 }}><span className="ic">🎯</span><h3>Генератор прицела</h3></span>
+        <span className="small muted">Коды нового формата CS…, предпросмотр в реальном масштабе, импорт старых кодов CSGO-… и команд консоли, пресеты и прицелы профи — на отдельной странице.</span>
+      </a>
       <div className="tabs">{TABS.map((t) => <button key={t.k} className={tab === t.k ? 'on' : ''} onClick={() => setQuery({ t: t.k })}>{t.ru}</button>)}</div>
-      {tab === 'crosshair' && <CrosshairTool />}
       {tab === 'sens' && <SensTool />}
       {tab === 'viewmodel' && <ViewmodelTool />}
       {tab === 'practice' && <PracticeTool />}
@@ -30,125 +35,6 @@ export default function Tools() {
       {tab === 'launch' && <LaunchTool />}
     </div>
   );
-}
-
-const DEFAULT_CH: CrosshairV1 = {
-  format: 'cs2-v1', style: 4, followRecoil: false, centerDotEnabled: false, tStyleEnabled: false, outlineMode: 1,
-  red: 0, green: 255, blue: 0, alpha: 255, outlineRed: 0, outlineGreen: 0, outlineBlue: 0, outlineAlpha: 255,
-  gap: 2, length: 8, thickness: 2, dynamicSpreadLimit: 0, splitDistance: 7, innerSplitAlpha: 0, outerSplitAlpha: 1,
-  splitSizeRatio: 1, screenHeight: 1080, scopeDotScale: 1, scopeDotUseCrosshairColor: false,
-} as CrosshairV1;
-
-function toV1(c: Crosshair): CrosshairV1 {
-  if (c.format === 'cs2-v1') return c;
-  const a: any = c;
-  return {
-    ...DEFAULT_CH,
-    style: a.style ?? 4, followRecoil: !!a.followRecoil, centerDotEnabled: !!a.centerDotEnabled, tStyleEnabled: !!a.tStyleEnabled,
-    outlineMode: a.outlineMode ?? (a.outlineEnabled ? 1 : 0), red: a.red, green: a.green, blue: a.blue, alpha: a.alpha ?? 255,
-    gap: Math.round(a.gap ?? 0), length: Math.max(1, Math.round((a.length ?? 2) * 4)), thickness: Math.max(1, Math.round((a.thickness ?? 0.5) * 2)),
-  };
-}
-
-function CrosshairTool() {
-  const [code, setCode] = useState('');
-  const [err, setErr] = useState('');
-  const [ch, setCh] = useLocal<CrosshairV1>('cs2craft.crosshair', DEFAULT_CH);
-  const [legacy, setLegacy] = useState(false);
-  const [bg, setBg] = useState(0);
-  const out = useMemo(() => { try { return encodeCrosshair(ch); } catch { return ''; } }, [ch]);
-  const convars = useMemo(() => { try { return crosshairToConVars(ch); } catch { return ''; } }, [ch]);
-  const load = (v: string) => {
-    setCode(v);
-    if (!v.trim()) return setErr('');
-    try {
-      const d = decodeCrosshairShareCode(v.trim());
-      setLegacy(d.format !== 'cs2-v1');
-      setCh(toV1(d));
-      setErr('');
-    } catch { setErr('Не похоже на код прицела. Новый формат — CS… (44 символа), старый — CSGO-XXXXX-…'); }
-  };
-  const num = (k: keyof CrosshairV1, label: string, min: number, max: number, step = 1) => (
-    <label className="row small" style={{ gap: 10, flexWrap: 'nowrap' }}>
-      <span className="muted" style={{ width: 150 }}>{label}</span>
-      <input type="range" className="grow" min={min} max={max} step={step} value={ch[k] as number} onChange={(e) => setCh({ ...ch, [k]: +e.target.value })} />
-      <span className="num" style={{ width: 40, textAlign: 'right' }}>{ch[k] as number}</span>
-    </label>
-  );
-  const flag = (k: keyof CrosshairV1, label: string) => <label className="check small"><input type="checkbox" checked={!!ch[k]} onChange={(e) => setCh({ ...ch, [k]: e.target.checked })} />{label}</label>;
-  const hex = '#' + [ch.red, ch.green, ch.blue].map((x) => x.toString(16).padStart(2, '0')).join('');
-  return (
-    <div className="grid cols-2" style={{ alignItems: 'start' }}>
-      <div className="card pad stack">
-        <h3>Импорт кода</h3>
-        <input className="input" placeholder="Вставьте код прицела (CS… или CSGO-…)" value={code} onChange={(e) => load(e.target.value)} />
-        {err && <div className="notice bad">{err}</div>}
-        {legacy && !err && <div className="notice warn">Это код старого формата. С 30.09.2026 CS2 принимает только новые коды «CS…», а размеры теперь в пикселях — ниже он уже переведён, проверьте длину и толщину.</div>}
-        <hr className="sep" />
-        {num('style', 'Стиль (0–9)', 0, 9)}
-        {num('length', 'Длина, px', 0, 40)}
-        {num('thickness', 'Толщина, px', 1, 12)}
-        {num('gap', 'Зазор, px', -10, 20)}
-        {num('outlineMode', 'Обводка (0–2)', 0, 2)}
-        {num('alpha', 'Прозрачность', 0, 255)}
-        <label className="row small" style={{ gap: 10 }}>
-          <span className="muted" style={{ width: 150 }}>Цвет</span>
-          <input type="color" value={hex} onChange={(e) => { const v = e.target.value; setCh({ ...ch, red: parseInt(v.slice(1, 3), 16), green: parseInt(v.slice(3, 5), 16), blue: parseInt(v.slice(5, 7), 16) }); }} />
-          {[['#00ff00', 'Зелёный'], ['#ffff00', 'Жёлтый'], ['#00ffff', 'Голубой'], ['#ff00ff', 'Розовый'], ['#ffffff', 'Белый']].map(([c, n]) => (
-            <button key={c} className="btn small icon" title={n} style={{ width: 26, height: 26, background: c }} onClick={() => setCh({ ...ch, red: parseInt(c.slice(1, 3), 16), green: parseInt(c.slice(3, 5), 16), blue: parseInt(c.slice(5, 7), 16) })} />
-          ))}
-        </label>
-        <div className="row">{flag('centerDotEnabled', 'Точка в центре')}{flag('tStyleEnabled', 'T-образный')}{flag('followRecoil', 'Следует за отдачей')}</div>
-      </div>
-      <div className="stack">
-        <div className="card" style={{ overflow: 'hidden' }}>
-          <CrosshairPreview ch={ch} bg={bg} />
-          <div className="row" style={{ padding: 10, gap: 6 }}>
-            {['Светлая стена', 'Тёмный угол', 'Небо'].map((n, i) => <button key={n} className={'chip' + (bg === i ? ' on' : '')} onClick={() => setBg(i)}>{n}</button>)}
-          </div>
-        </div>
-        <div className="card pad stack" style={{ gap: 10 }}>
-          <div className="row between"><h3>Код для CS2</h3><button className="btn small primary" disabled={!out} onClick={() => copy(out, 'Код прицела скопирован')}>Копировать</button></div>
-          <div className="code">{out || '—'}</div>
-          <p className="tiny faint">В игре: Настройки → Игра → Прицел → «Импорт кода».</p>
-          <div className="row between"><h3>Команды консоли</h3><button className="btn small" disabled={!convars} onClick={() => copy(convars.replace(/\n/g, '; '))}>Копировать</button></div>
-          <div className="code" style={{ maxHeight: 180, overflow: 'auto' }}>{convars}</div>
-          <p className="tiny faint">Кодирование — библиотека csgo-sharecode (MIT, akiver).</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CrosshairPreview({ ch, bg }: { ch: CrosshairV1; bg: number }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const c = ref.current!;
-    const g = c.getContext('2d')!;
-    const W = (c.width = 640), H = (c.height = 300);
-    const grads = [['#b9b2a0', '#8e8673'], ['#2b2a2f', '#151518'], ['#9cc7e6', '#d9ecf7']];
-    const gr = g.createLinearGradient(0, 0, 0, H);
-    gr.addColorStop(0, grads[bg][0]); gr.addColorStop(1, grads[bg][1]);
-    g.fillStyle = gr; g.fillRect(0, 0, W, H);
-    const k = 2; // preview zoom (sizes are px at 1080p)
-    const cx = W / 2, cy = H / 2;
-    const len = ch.length * k, th = Math.max(1, ch.thickness * k), gap = ch.gap * k + th / 2;
-    const color = `rgba(${ch.red},${ch.green},${ch.blue},${ch.alpha / 255})`;
-    const rects: [number, number, number, number][] = [];
-    rects.push([cx + gap, cy - th / 2, len, th]);
-    rects.push([cx - gap - len, cy - th / 2, len, th]);
-    rects.push([cx - th / 2, cy + gap, th, len]);
-    if (!ch.tStyleEnabled) rects.push([cx - th / 2, cy - gap - len, th, len]);
-    if (ch.centerDotEnabled) rects.push([cx - th / 2, cy - th / 2, th, th]);
-    if (ch.outlineMode) {
-      const o = ch.outlineMode * k * 0.5 + 1;
-      g.fillStyle = `rgba(${ch.outlineRed},${ch.outlineGreen},${ch.outlineBlue},${ch.outlineAlpha / 255})`;
-      for (const [x, y, w, h] of rects) g.fillRect(x - o, y - o, w + 2 * o, h + 2 * o);
-    }
-    g.fillStyle = color;
-    for (const [x, y, w, h] of rects) g.fillRect(x, y, w, h);
-  }, [ch, bg]);
-  return <canvas ref={ref} style={{ width: '100%', display: 'block' }} />;
 }
 
 const GAMES = [

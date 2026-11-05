@@ -1,0 +1,62 @@
+/* Раскидки: layout like cs2util — sidebar · radar · list, popup with the 3D replay */
+.nd-layout { display: grid; grid-template-columns: 250px minmax(0, 1fr) 340px; gap: 14px; align-items: start; }
+.nd-side { position: sticky; top: 76px; padding: 0; overflow: hidden; }
+.nd-side-sec { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.nd-side-sec:last-child { border-bottom: 0; }
+.nd-label { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); margin-bottom: 8px; }
+.nd-tabs { border-bottom: 0; }
+.nd-tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+.nd-types { display: grid; gap: 4px; }
+.nd-types button { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; font-weight: 600; font-size: 14px; text-align: left; }
+.nd-types button span { flex: 1; }
+.nd-types button b { font-variant-numeric: tabular-nums; color: var(--faint); font-weight: 600; font-size: 13px; }
+.nd-types button:hover { background: var(--surface-2); }
+.nd-types button.on { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 45%, transparent); color: var(--text); }
+.nd-types button.on b { color: var(--text); }
+.nd-main { min-width: 0; }
+.nd-radar { overflow: hidden; background: #0b0d10; }
+.nd-callout { font: 600 15px var(--font); fill: #fff; paint-order: stroke; stroke: rgba(0, 0, 0, .85); stroke-width: 4px; pointer-events: none; letter-spacing: .01em; }
+.nd-list { position: sticky; top: 76px; overflow: hidden; }
+.nd-list-body { max-height: calc(100vh - 170px); overflow: auto; }
+.nd-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 14px; background: transparent; border: 0; border-bottom: 1px solid var(--border); cursor: pointer; text-align: left; color: inherit; }
+.nd-item:hover { background: var(--surface-2); }
+.nd-item.on { background: var(--accent-soft); }
+.nd-item-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.nd-item-title { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nd-ell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 1240px) { .nd-layout { grid-template-columns: 230px minmax(0, 1fr); } .nd-list { grid-column: 1 / -1; position: static; } .nd-list-body { max-height: 520px; } }
+@media (max-width: 760px) { .nd-layout { grid-template-columns: 1fr; } .nd-side { position: static; } .nd-main { order: -1; } }
+
+/* popup */
+.nd-modal { position: fixed; inset: 0; z-index: 100; background: rgba(5, 6, 9, .72); backdrop-filter: blur(3px); display: grid; place-items: center; padding: 18px; overflow: auto; }
+.nd-dialog { width: min(1280px, 100%); max-height: calc(100vh - 36px); display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow); }
+.nd-dialog-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.nd-dialog-body { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 0; overflow: auto; }
+.nd-dialog-video { padding: 14px; border-right: 1px solid var(--border); min-width: 0; }
+.nd-dialog-info { padding: 14px; min-width: 0; }
+.nd-keys { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.nd-key { display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border-radius: 7px; background: var(--surface-3); border: 1px solid var(--border); border-bottom-width: 3px; font-weight: 600; font-size: 13px; }
+.nd-who { max-height: 320px; overflow: auto; border-top: 1px solid var(--border); }
+.nd-who-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--border); }
+.nd-who-row.on { background: var(--accent-soft); }
+.nd-who-row.hl .nd-who-main b { color: var(--accent); }
+.nd-who-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 7px 6px; background: transparent; border: 0; text-align: left; color: inherit; cursor: pointer; font-size: 13px; }
+.nd-who-main:hover:not(:disabled) { background: var(--surface-2); }
+.nd-who-main:disabled { cursor: default; }
+.nd-ext { display: grid; place-items: center; width: 34px; color: var(--muted); font-size: 15px; }
+.nd-ext:hover { color: var(--link); background: var(--surface-2); }
+@media (max-width: 980px) { .nd-dialog-body { grid-template-columns: 1fr; } .nd-dialog-video { border-right: 0; border-bottom: 1px solid var(--border); } .nd-modal { padding: 0; } .nd-dialog { max-height: 100vh; border-radius: 0; } }
+
+/* 3D replay */
+.r3d { display: flex; flex-direction: column; gap: 8px; }
+.r3d-stage { position: relative; aspect-ratio: 16 / 9; width: 100%; background: #0b0d10; border-radius: 10px; overflow: hidden; }
+.r3d-msg { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 14px; }
+.r3d-badge { position: absolute; left: 10px; top: 10px; padding: 3px 9px; border-radius: 6px; background: rgba(0, 0, 0, .55); color: #fff; font-size: 12px; font-weight: 600; pointer-events: none; }
+.r3d-rec { position: absolute; right: 10px; top: 10px; padding: 3px 9px; border-radius: 6px; background: rgba(200, 30, 30, .8); color: #fff; font-size: 12px; font-weight: 700; }
+.r3d-cross { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+.r3d-cross::before, .r3d-cross::after { content: ''; position: absolute; background: #3cff6e; box-shadow: 0 0 0 1px rgba(0, 0, 0, .75); }
+.r3d-cross::before { left: -9px; top: -1px; width: 18px; height: 2px; background: linear-gradient(90deg, #3cff6e 0 7px, transparent 7px 11px, #3cff6e 11px); box-shadow: none; }
+.r3d-cross::after { left: -1px; top: -9px; width: 2px; height: 18px; background: linear-gradient(180deg, #3cff6e 0 7px, transparent 7px 11px, #3cff6e 11px); box-shadow: none; }
+.r3d-flash { position: absolute; inset: 0; background: #fff; pointer-events: none; animation: r3d-flash 1.8s ease-out forwards; }
+@keyframes r3d-flash { 0% { opacity: 0; } 6% { opacity: .95; } 40% { opacity: .8; } 100% { opacity: 0; } }
+.r3d-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

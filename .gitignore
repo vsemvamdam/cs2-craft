@@ -7,7 +7,9 @@ public/data/h/
 .DS_Store
 tests/.tradeup.bundle.mjs
 tests/.inspect.bundle.mjs
+tests/.crosshair.bundle.mjs
+tests/.crosshair-lib.bundle.mjs
 __pycache__/
 public/data/nades/x/
-public/data/callouts/
+public/data/callouts/de_*.json
 public/data/players/
