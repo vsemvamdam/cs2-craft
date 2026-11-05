@@ -146,8 +146,8 @@ export function parseMatchInfo(mi, { tier, now = Date.now() / 1000 } = {}) {
 }
 
 export const matchKey = (m) => {
-  const a = (m.t1.page || m.t1.n).toLowerCase();
-  const b = (m.t2.page || m.t2.n).toLowerCase();
+  const a = m.t1.n.toLowerCase();
+  const b = m.t2.n.toLowerCase();
   return [a, b].sort().join('|') + '|' + (m.tpage || m.tour || '').toLowerCase();
 };
 

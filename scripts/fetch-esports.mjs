@@ -76,7 +76,7 @@ try {
   log('liquipedia matches FAILED:', errText(e));
   sources.liquipedia = { ok: false, at: prev.sources?.liquipedia?.at || null, error: errText(e) };
   // keep the previous list; statuses are recomputed below and on the page
-  matches = (prev.matches || []).map(({ odds, id, ...m }) => ({ ...m, t1: { ...m.t1, page: m.t1.p }, t2: { ...m.t2, page: m.t2.p }, tpage: m.tp, _odds: odds }));
+  matches = (prev.matches || []).map(({ odds, id, tp, ...m }) => ({ ...m, tpage: tp, _odds: odds }));
 }
 
 // finished results: this run's + earlier ones (the ticker only lists the last N)
@@ -86,6 +86,7 @@ for (const m of cache.results) if (m.start > NOW - RESULTS_KEEP) byKey.set(keyOf
 for (const m of matches) {
   if (m.status === 'finished' && m.start < NOW - RESULTS_KEEP) continue;
   if (m.status !== 'finished' && m.start > NOW + UPCOMING_HORIZON) continue;
+  if (m.status !== 'finished' && m.start < NOW - 10 * H) continue; // "live" for 10+ hours = stale wiki entry
   byKey.set(keyOf(m), m); // fresher wins
 }
 // a match that was upcoming/live before and is now listed as finished replaces the old entry (same key)
@@ -192,7 +193,7 @@ sources.oddspapi = op;
 const prevOdds = new Map();
 for (const m of prev.matches || []) if (m.odds) prevOdds.set(m.id, m.odds);
 
-const team = (t) => ({ n: t.n, ...(t.f ? { f: t.f } : {}), ...(t.page && t.page !== t.n && t.page !== t.f ? { p: t.page } : {}), ...(t.tbd ? { tbd: true } : {}) });
+const team = (t) => ({ n: t.n, ...(t.f ? { f: t.f } : {}), ...(t.tbd ? { tbd: true } : {}) });
 const outMatches = matches
   .map((m) => {
     const k = hash(keyOf(m));
