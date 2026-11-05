@@ -1,0 +1,13 @@
+{
+ "started": "2026-11-05T03:15:57Z",
+ "repo": "KEDevO/CounterQuant-CS2-Demos",
+ "listed": 0,
+ "candidates": 0,
+ "done": [],
+ "errors": [
+  "list data/2026/tier1: RepositoryNotFoundError: 401 Client Error. (Request ID: Root=1-6aebf4ed-394dc30954259abb161ead10;81c209e4-df4d-4375-8b20-a1fa904fbdff)\n\nRepository Not Found for url: https://huggingface.co/api/datasets/KEDevO/CounterQuant-CS2-Demos/tree/main/data%2F2026%2Ftier1?recursive=true&expand=false.\nPlease make sure you specified the correct `repo_id` and `repo_type`.\nIf you are trying to access a private or gated repo, make sure you are authenticated and your token has the required permissions.\nFor more details, see https://huggingface.co/docs/huggingface_hub/authentication\nInvalid username or password."
+ ],
+ "sample_paths": [],
+ "other_files": [],
+ "finished": "2026-11-05T03:15:57Z"
+}
