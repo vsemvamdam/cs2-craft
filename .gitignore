@@ -1,0 +1,9 @@
+node_modules/
+dist/
+store/
+public/data/prices.json
+public/data/h/
+*.tmp
+.DS_Store
+tests/.tradeup.bundle.mjs
+tests/.inspect.bundle.mjs

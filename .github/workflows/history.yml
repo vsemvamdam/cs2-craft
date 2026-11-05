@@ -1,0 +1,51 @@
+name: История цен Steam
+
+# Полная история сделок Steam Market с первой продажи каждого предмета.
+# Нужен секрет STEAM_REFRESH_TOKEN (npm run steam-login) или STEAM_LOGIN_SECURE.
+on:
+  schedule:
+    - cron: '47 2,8,14,20 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: history
+  cancel-in-progress: false
+
+jobs:
+  history:
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    env:
+      GH_TOKEN: ${{ github.token }}
+      STEAM_REFRESH_TOKEN: ${{ secrets.STEAM_REFRESH_TOKEN }}
+      STEAM_LOGIN_SECURE: ${{ secrets.STEAM_LOGIN_SECURE }}
+    steps:
+      - name: Проверить секрет
+        id: chk
+        run: |
+          if [ -n "$STEAM_REFRESH_TOKEN$STEAM_LOGIN_SECURE" ]; then echo "ok=1" >> "$GITHUB_OUTPUT"; else echo "::notice::Секрет Steam не задан — полная история не загружается (см. README)"; fi
+      - uses: actions/checkout@v4
+        if: steps.chk.outputs.ok == '1'
+      - uses: actions/setup-node@v4
+        if: steps.chk.outputs.ok == '1'
+        with:
+          node-version: 22
+          cache: npm
+      - if: steps.chk.outputs.ok == '1'
+        run: npm ci
+      - name: Хранилища
+        if: steps.chk.outputs.ok == '1'
+        run: scripts/store.sh pull prices && scripts/store.sh pull history
+      - name: Загрузка истории (до 5 часов за запуск)
+        if: steps.chk.outputs.ok == '1'
+        run: HISTORY_BUDGET_MIN=300 node scripts/fetch-history.mjs
+      - name: Сохранить историю
+        if: always() && steps.chk.outputs.ok == '1'
+        run: scripts/store.sh push history
+      - name: Пересобрать сайт
+        if: success() && steps.chk.outputs.ok == '1'
+        run: gh workflow run site.yml -f quick=true

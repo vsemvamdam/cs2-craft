@@ -1,0 +1,70 @@
+name: Цены и сайт
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 */6 * * *'   # каждые 6 часов
+  workflow_dispatch:
+    inputs:
+      quick:
+        description: 'Только пересобрать сайт (без обхода Steam)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: site
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: База предметов (ByMykel/CSGO-API)
+        run: node scripts/build-db.mjs || echo "::warning::не удалось обновить базу — собираю из закоммиченной"
+      - name: Загрузить хранилище цен
+        run: scripts/store.sh pull prices
+      - name: Текущие цены (Steam, Skinport, курс ЦБ)
+        run: |
+          if { [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.quick }}" = "true" ]; } && [ -f store/prices/current.json ]; then
+            echo "push: обновляю только Skinport и курс"; SKIP_STEAM=1 node scripts/fetch-prices.mjs
+          else
+            STEAM_BUDGET_MIN=45 node scripts/fetch-prices.mjs
+          fi
+      - name: Сохранить хранилище цен
+        if: always()
+        run: scripts/store.sh push prices
+      - name: Загрузить историю Steam
+        run: scripts/store.sh pull history
+      - name: Данные для сайта
+        run: node scripts/build-site-data.mjs
+      - name: Сборка
+        run: npm test && npm run build
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,33 @@
+{
+  "name": "cs2-craft",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "CS2: калькулятор крафтов, каталог скинов с историей цен, стикер-крафты, паттерны и раскидки",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build && node scripts/postbuild.mjs",
+    "preview": "vite preview",
+    "db": "node scripts/build-db.mjs",
+    "prices": "node scripts/fetch-prices.mjs",
+    "history": "node scripts/fetch-history.mjs",
+    "site-data": "node scripts/build-site-data.mjs",
+    "steam-login": "node scripts/steam-login.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "csgo-sharecode": "^7.0.1",
+    "lightweight-charts": "^5.2.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "qrcode-terminal": "^0.12.0",
+    "steam-session": "^1.9.4",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.3"
+  }
+}
