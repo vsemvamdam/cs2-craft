@@ -83,7 +83,8 @@ async function main() {
   // Doppler / Gamma Doppler phase prices (Skinport separates them, Steam does not)
   const ph = {};
   for (const [key, val] of Object.entries(current.phases || {})) {
-    const [name, phase] = key.split('|');
+    const cut = key.lastIndexOf('|');
+    const name = key.slice(0, cut), phase = key.slice(cut + 1);
     const hit = index.get(name);
     if (!hit) continue;
     ((ph[hit.id] ||= {})[phase] ||= {})[hit.vk] = val;

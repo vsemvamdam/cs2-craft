@@ -81,7 +81,7 @@ export function PriceChart({ hist, vk, prices }: { hist: HistoryFile | null; vk:
     else chart.timeScale().setVisibleRange({ from: t(Math.max(Math.min(...all), last - r.days)), to: t(last) });
   }, [range, hist, vk]);
 
-  const has = steam.length || snaps.length;
+  const has = steam.length > 1 || snaps.length > 1;
   return (
     <div className="stack" style={{ gap: 10 }}>
       <div className="row between">
@@ -100,7 +100,7 @@ export function PriceChart({ hist, vk, prices }: { hist: HistoryFile | null; vk:
       <div ref={ref} style={{ height: 320, display: has ? 'block' : 'none' }} />
       {!has && (
         <div className="notice">
-          Истории для этого варианта пока нет. Ежедневные снимки цен копятся автоматически; полная история Steam с первой сделки загружается, когда в репозитории задан секрет <span className="kbd">STEAM_REFRESH_TOKEN</span> (см. README).
+          {snaps.length === 1 ? 'Пока есть только сегодняшний снимок цены — ' : 'Истории для этого варианта пока нет — '}график появится, когда накопится хотя бы два дня снимков. Полная история Steam с первой сделки загружается, когда в репозитории задан секрет <span className="kbd">STEAM_REFRESH_TOKEN</span> (см. README).
         </div>
       )}
       {has && currency !== 'USD' ? <div className="tiny faint">Steam ведёт историю в долларах; в {currency} пересчитано по сегодняшнему курсу.</div> : null}

@@ -109,7 +109,7 @@ export default function SkinPage({ id }: { id: string }) {
                 <button className="btn ghost icon" disabled={curIdx >= wearList.length - 1} onClick={() => setWear(wearList[curIdx + 1])} aria-label="Следующий износ">›</button>
               </div>
               <div className="card float-box">
-                <span className="muted">Float:</span>
+                <span className="stack" style={{ gap: 0 }}><span className="muted">Float</span><span className="tiny faint num nowrap">{skin.mn.toFixed(2)}–{skin.mx.toFixed(2)}</span></span>
                 <input
                   className="input f"
                   type="number"
@@ -120,9 +120,7 @@ export default function SkinPage({ id }: { id: string }) {
                   placeholder={(Math.max(skin.mn, WEARS[wearIdx].min) + (Math.min(skin.mx, WEARS[wearIdx].max) - Math.max(skin.mn, WEARS[wearIdx].min)) / 2).toFixed(3)}
                   onChange={(e) => e.target.value !== '' && onFloat(parseFloat(e.target.value))}
                 />
-                <span className="num small muted">{skin.mn.toFixed(2)}</span>
                 <FloatBar value={floatVal ?? Math.max(skin.mn, WEARS[wearIdx].min) + (Math.min(skin.mx, WEARS[wearIdx].max) - Math.max(skin.mn, WEARS[wearIdx].min)) / 2} min={skin.mn} max={skin.mx} onChange={onFloat} />
-                <span className="num small muted">{skin.mx.toFixed(2)}</span>
               </div>
             </div>
           )}
@@ -186,6 +184,23 @@ export default function SkinPage({ id }: { id: string }) {
               <a className="btn small" target="_blank" rel="noreferrer" href={skinportUrl(marketName(skin, flag, wear))}>Skinport ↗</a>
               {skin.phases && <span className="tiny faint">Steam не разделяет фазы Doppler — цены по фазам берутся со Skinport.</span>}
             </div>
+            {(() => {
+              // special pattern variants Skinport sells separately (Blue Gem, Fire & Ice, Max…)
+              const ph = prices?.ph?.[skin.id];
+              if (!ph) return null;
+              const PH = new Set(['Phase 1', 'Phase 2', 'Phase 3', 'Phase 4', 'Ruby', 'Sapphire', 'Black Pearl', 'Emerald']);
+              const rows = Object.entries(ph)
+                .filter(([name]) => !PH.has(name))
+                .map(([name, v]) => ({ name, p: v[vk]?.[0] ?? v[vk]?.[2] ?? null, vol: (v[vk]?.[1] || 0) + (v[vk]?.[3] || 0) }))
+                .filter((r) => r.p != null);
+              if (!rows.length) return null;
+              return (
+                <div style={{ padding: '10px 18px 14px', borderTop: '1px solid var(--border)' }} className="stack small">
+                  <b>Особые паттерны ({WEARS[wearIdx]?.short || ''}, медиана продаж Skinport)</b>
+                  {rows.map((r) => <div key={r.name} className="row between"><span>{r.name}</span><span className="num">{money(r.p, prices, currency)} <span className="faint tiny">· {r.vol} продаж</span></span></div>)}
+                </div>
+              );
+            })()}
           </div>
 
           {(craftLink || inputLink) && (
