@@ -16,10 +16,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { NodeIO, Logger, getBounds } from '@gltf-transform/core';
-import { ALL_EXTENSIONS, EXTMeshoptCompression } from '@gltf-transform/extensions';
-import { dedup, prune, weld, join, simplify, quantize, textureCompress, transformMesh } from '@gltf-transform/functions';
+import { ALL_EXTENSIONS, EXTMeshoptCompression, EXTTextureWebP } from '@gltf-transform/extensions';
+import { dedup, prune, weld, join, simplify, quantize, transformMesh } from '@gltf-transform/functions';
 import { MeshoptEncoder, MeshoptSimplifier } from 'meshoptimizer';
 import sharp from 'sharp';
+import { PNG } from 'pngjs';
 
 const argv = process.argv.slice(2);
 const opt = (k, d) => { const i = argv.indexOf('--' + k); return i >= 0 ? argv[i + 1] : d; };
@@ -27,6 +28,7 @@ const [SRC, OUT] = argv.filter((a, i) => !a.startsWith('--') && !argv[i - 1]?.st
 if (!SRC || !OUT) { console.error('usage: node build_textured.mjs export/de_mirage.gltf out/de_mirage.glb'); process.exit(1); }
 const TEX = +opt('tex', 512);
 const SIMPLIFY = +opt('simplify', 0.0004);
+const MAX_TRIS = +opt('max-tris', 1_000_000); // heavy maps (Ancient: 9M) are simplified down to this budget
 const INCH = 1 / 0.0254; // Source 2 Viewer writes metres
 
 const isTool = (name) => /^materials\/tools\//i.test(name) || /tools(nodraw|clip|trigger|skybox|invisible|playerclip|blocklight|black)/i.test(name);
@@ -138,14 +140,58 @@ await doc.transform(
   simplify({ simplifier: MeshoptSimplifier, ratio: 0, error: SIMPLIFY, lockBorder: true }),
   prune(),
 );
+if (tris() > MAX_TRIS) {
+  const before = tris();
+  // stronger pass towards the budget: allowed error grows until the map fits (foliage and small props go first)
+  for (const err of [0.0015, 0.004, 0.01]) {
+    await doc.transform(simplify({ simplifier: MeshoptSimplifier, ratio: MAX_TRIS / tris(), error: err, lockBorder: false }), prune());
+    if (tris() <= MAX_TRIS * 1.05) break;
+  }
+  console.log(`budget ${MAX_TRIS}: ${Math.round(before)} → ${Math.round(tris())} triangles`);
+}
 console.log(`after merge/simplify: meshes ${root.listMeshes().length}, primitives ${root.listMeshes().reduce((a, m) => a + m.listPrimitives().length, 0)}, triangles ${Math.round(tris())}`);
 const b = getBounds(root.listScenes()[0]);
 console.log('bounds (three units = Source inches):', b.min.map(Math.round), b.max.map(Math.round));
 
-await doc.transform(
-  textureCompress({ encoder: sharp, targetFormat: 'webp', resize: [TEX, TEX], quality: 80 }),
-  quantize({ quantizePosition: 16, quantizeTexcoord: 14, quantizeColor: 8, quantizeNormal: 8 }),
-);
+// textures → WebP ≤TEX px. 16-bit PNGs (some maps have them) crash libvips' colour conversion on Windows,
+// so anything that is not plain 8-bit goes through pngjs (rescales to 8-bit RGBA) first.
+let webp = 0, viaPng = 0, droppedTex = 0;
+/** pngjs keeps 16-bit samples (Uint16Array, or big-endian byte pairs) — take the high byte of each */
+const rgba8 = (png) => {
+  const n = png.width * png.height * 4, d = png.data;
+  if (d.BYTES_PER_ELEMENT === 1 && d.length === n) return Buffer.from(d.buffer, d.byteOffset, n);
+  const o = Buffer.alloc(n);
+  if (d.BYTES_PER_ELEMENT === 2) for (let i = 0; i < n; i++) o[i] = d[i] >> 8;
+  else for (let i = 0; i < n; i++) o[i] = d[i * 2];
+  return o;
+};
+const toWebp = (img) => img.resize(TEX, TEX, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 80, alphaQuality: 90, effort: 4 }).toBuffer();
+for (const tex of root.listTextures()) {
+  const src = Buffer.from(tex.getImage() || []);
+  let out = null;
+  try {
+    const meta = await sharp(src).metadata();
+    if (meta.depth === 'uchar') out = await toWebp(sharp(src));
+  } catch { /* fall through to pngjs */ }
+  if (!out) {
+    try {
+      const png = PNG.sync.read(src);
+      out = await toWebp(sharp(rgba8(png), { raw: { width: png.width, height: png.height, channels: 4 } }));
+      viaPng++;
+    } catch { /* unreadable */ }
+  }
+  if (!out) {
+    for (const parent of tex.listParents()) if (parent.propertyType === 'Material') parent.setBaseColorTexture(null).setBaseColorFactor([0.62, 0.56, 0.48, 1]);
+    tex.dispose();
+    droppedTex++;
+    continue;
+  }
+  tex.setImage(new Uint8Array(out)).setMimeType('image/webp').setURI((tex.getURI() || 'tex').replace(/\.[a-z0-9]+$/i, '') + '.webp');
+  webp++;
+}
+doc.createExtension(EXTTextureWebP).setRequired(true);
+console.log(`textures: ${webp} WebP${viaPng ? ` (${viaPng} via 16-bit converter)` : ''}${droppedTex ? `, ${droppedTex} unreadable dropped` : ''}`);
+await doc.transform(quantize({ quantizePosition: 16, quantizeTexcoord: 14, quantizeColor: 8, quantizeNormal: 8 }));
 doc.createExtension(EXTMeshoptCompression).setRequired(true).setEncoderOptions({ method: EXTMeshoptCompression.EncoderMethod.QUANTIZE });
 await io.write(OUT, doc);
 console.log(`→ ${OUT}: ${(fs.statSync(OUT).size / 1048576).toFixed(1)} MB`);
