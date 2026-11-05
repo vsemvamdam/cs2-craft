@@ -8,16 +8,16 @@ import { href, navigate, useRoute } from '../lib/router';
 const NAV = [
   { to: '/skins', label: 'Скины' },
   { to: '/tradeup', label: 'Крафты' },
-  { to: '/craft', label: 'Стикер-крафт' },
   { to: '/nades', label: 'Раскидки' },
   { to: '/callouts', label: 'Коллауты' },
   { to: '/players', label: 'Игроки' },
+  { to: '/esports', label: 'Матчи' },
   { to: '/stats', label: 'Статистика' },
   { to: '/crosshair', label: 'Прицел' },
 ];
 /** less used sections: under «Ещё» on desktop, listed flat in the mobile menu */
 const MORE = [
-  { to: '/esports', label: 'Матчи' },
+  { to: '/craft', label: 'Стикер-крафт' },
   { to: '/patterns', label: 'Паттерны' },
   { to: '/tools', label: 'Утилиты' },
   { to: '/collections', label: 'Коллекции' },
@@ -58,7 +58,7 @@ function Search() {
   }, []);
   const go = (to: string) => { navigate(to); setOpen(false); setQ(''); };
   return (
-    <div ref={box} className="header-search" style={{ position: 'relative', width: 'min(260px, 30vw)' }}>
+    <div ref={box} className="header-search" style={{ position: 'relative', width: 'clamp(150px, 16vw, 260px)' }}>
       <input
         className="input"
         style={{ width: '100%' }}
