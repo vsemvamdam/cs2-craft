@@ -11,6 +11,7 @@ const NAV = [
   { to: '/craft', label: 'Стикер-крафт' },
   { to: '/patterns', label: 'Паттерны' },
   { to: '/nades', label: 'Раскидки' },
+  { to: '/esports', label: 'Матчи' },
   { to: '/tools', label: 'Утилиты' },
   { to: '/collections', label: 'Коллекции' },
 ];

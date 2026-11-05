@@ -36,17 +36,24 @@ const ALIAS = {
 };
 const JUNIOR = /(academy|junior|juniors|youth|fe|female|women|ladies|young|next|blue|white|red|2)$/;
 
+// spelled-out parts inside longer names ("Natus Vincere Junior" → "navijunior")
+const REPL = [['natusvincere', 'navi'], ['ninjasinpyjamas', 'nip'], ['virtuspro', 'vp'], ['mousesports', 'mouz'], ['innercircle', 'ic']];
+const WORD = { jr: 'junior', acad: 'academy', ac: 'academy' };
+
 export function normTeam(s) {
   if (!s) return '';
   const words = s
     .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/&/g, ' and ')
     .replace(/[^a-z0-9а-яё]+/g, ' ')
     .split(' ')
-    .filter((w) => w && !STOP.has(w));
-  return words.join('');
+    .filter((w) => w && !STOP.has(w))
+    .map((w) => WORD[w] || w);
+  let k = words.join('');
+  for (const [from, to] of REPL) k = k.replace(from, to);
+  return k;
 }
 
 /** all comparable keys of a team: short name, full name, aliases */

@@ -52,7 +52,8 @@ export function liquipediaClient({ fetchImpl = fetch, log = console.log, dump } 
 // ───────────────────────── matches ─────────────────────────
 
 const pageFromHref = (href) => {
-  const m = /\/counterstrike\/([^?#]+)/.exec(href || '');
+  const red = /[?&]title=([^&#]+)/.exec(href || ''); // red link: index.php?title=X&action=edit&redlink=1
+  const m = red || /\/counterstrike\/([^?#]+)/.exec(href || '');
   return m ? decodeURIComponent(m[1]).replace(/_/g, ' ') : null;
 };
 
@@ -61,11 +62,12 @@ function opponent(node) {
   const a = node.find('.name')?.find('a') || node.find('a[title]');
   if (a) {
     const short = a.clean;
-    const full = (a.attr('title') || short).replace(/ \(page does not exist\)$/, '');
-    return { n: short || full, f: full !== short ? full : undefined, page: pageFromHref(a.attr('href')) };
+    const title = (a.attr('title') || short).replace(/ \(page does not exist\)$/, '');
+    const full = title.replace(/\s*\([^)]*\)$/, ''); // "MAYBE (Ukrainian team)" → "MAYBE"
+    return { n: short || full, f: full !== short ? full : undefined, page: pageFromHref(a.attr('href')) || title };
   }
-  const lit = node.clean; // "TBD", "Group B 2nd Place"
-  return lit ? { n: lit, tbd: true } : { n: 'TBD', tbd: true };
+  const lit = node.clean.replace(/[\u200b-\u200d\ufeff]/g, '').trim(); // "TBD", "Group B 2nd Place", zero-width space
+  return { n: lit || 'TBD', tbd: true };
 }
 
 function streamLinks(container) {
