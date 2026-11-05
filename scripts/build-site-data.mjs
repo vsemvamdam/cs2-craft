@@ -94,6 +94,12 @@ async function main() {
   const ch = {};
   for (const x of charms) { const r = row(x.m); if (r) ch[x.id] = r; }
 
+  // most traded skins (Skinport 7-day volume) — the list for collecting Steam history from a home connection
+  // (Steam refuses market history requests from GitHub servers), see scripts/collect-history.mjs
+  const targets = [...index.keys()].map((name) => [name, current.skinport?.[name]?.[2] || 0]).filter((x) => x[1] > 0)
+    .sort((a, b) => b[1] - a[1]).slice(0, 2000).map((x) => x[0]);
+  await writeJSON(path.join(DATA, 'history-targets.json'), { updated: current.updated || null, names: targets });
+
   await writeJSON(path.join(DATA, 'prices.json'), {
     updated: current.updated || null,
     rates: current.rates || { USD: 1 },

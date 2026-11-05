@@ -48,22 +48,19 @@
 
 Коэффициенты показываются справочно (18+), без ссылок на букмекеров — это не реклама и не рекомендация к ставкам.
 
-### Включить полную историю цен Steam
+### Полная история цен Steam
 
-1. Лучше завести/взять **второй** аккаунт Steam (токен даёт доступ к аккаунту).
-2. Получить токен на своём компьютере. Windows — в PowerShell (Win+X → «Терминал»), не в окне «Выполнить»:
+Steam отвечает «429 — слишком много запросов» на любой запрос истории цен с серверов GitHub (проверено: 0 предметов за 5 часов), поэтому историю собирают с обычного домашнего подключения. Вход в Steam не нужен — данные берутся со страниц предметов на торговой площадке.
+
+1. На своём компьютере в PowerShell (нужен Node.js — `winget install OpenJS.NodeJS.LTS`):
    ```powershell
-   winget install OpenJS.NodeJS.LTS        # один раз; потом закройте и снова откройте терминал
-   mkdir $HOME\cs2-login; cd $HOME\cs2-login
-   npm init -y; npm install steam-session qrcode-terminal
-   curl.exe -L -o steam-login.mjs https://raw.githubusercontent.com/vsemvamdam/cs2-craft/main/scripts/steam-login.mjs
-   node steam-login.mjs
+   mkdir $HOME\cs2-history -Force; cd $HOME\cs2-history
+   curl.exe -L -o collect-history.mjs https://raw.githubusercontent.com/vsemvamdam/cs2-craft/main/scripts/collect-history.mjs
+   node collect-history.mjs              # 600 самых продаваемых скинов, ~45 минут; --limit 1500 — больше
    ```
-   Отсканируйте QR-код в приложении Steam (значок щита → «Сканировать QR-код»), подтвердите вход — в терминале появится токен. (Если репозиторий склонирован — то же самое делает `npm install && npm run steam-login`.)
-3. Скопировать токен в **Settings → Secrets and variables → Actions → New repository secret**, имя `STEAM_REFRESH_TOKEN`. Больше нигде его не храните.
-4. **Actions → «История цен Steam» → Run workflow** (или дождаться расписания).
-
-Токен живёт ~200 дней; когда Steam перестанет его принимать, в логе будет «403» — повторите шаг 2–3.
+   Можно прервать (Ctrl+C) и запустить снова — продолжит с места остановки.
+2. Получившийся `cs2-history.json.gz` прикрепить к релизу **data-store** (Releases → «Хранилище данных» → Edit → перетащить файл → Update release).
+3. **Actions → «Импорт истории цен (с домашнего компьютера)» → Run workflow.** История попадёт на графики сайта и в астро-анализ рынка (`tools/astro/market_astro.py`).
 
 > GitHub отключает расписания в репозиториях без активности 60 дней. Если цены перестали обновляться — зайдите в Actions и включите workflow обратно.
 
