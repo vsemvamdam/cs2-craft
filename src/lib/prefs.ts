@@ -62,7 +62,7 @@ export function fromCentsUSD(cents: number, prices: Prices | null, cur: Currency
 export function pick(row: PriceRow | undefined | null, source: Source): number | null {
   if (!row) return null;
   const steam = row[0];
-  const sp = row[2] ?? row[3];
+  const sp = row[2] ?? row[3] ?? row[5];
   if (source === 'steam') return steam ?? sp ?? null;
   if (source === 'skinport') return sp ?? steam ?? null;
   const c = [steam, sp].filter((x): x is number => x != null);

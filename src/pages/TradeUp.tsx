@@ -157,7 +157,7 @@ export default function TradeUp() {
                           </td>
                           <td className="r num">{pct(o.prob, o.prob < 0.01 ? 3 : 2)}</td>
                           <td className="r num">{o.float.toFixed(4)}</td>
-                          <td className="r num">{money(o.price, prices, prefs.currency)}</td>
+                          <td className="r num" title={o.approx ? 'Цена соседнего износа' : undefined}>{o.approx ? '≈ ' : ''}{money(o.price, prices, prefs.currency)}</td>
                           <td className={'r num ' + (delta == null ? '' : delta >= 0 ? 'good' : 'bad')}>{delta == null ? '—' : (delta >= 0 ? '+' : '') + money(delta, prices, prefs.currency)}</td>
                         </tr>
                       );

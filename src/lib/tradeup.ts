@@ -24,6 +24,8 @@ export type Outcome = {
   net: number | null;
   /** collection that produced the ticket(s) */
   cols: string[];
+  /** price borrowed from a neighbouring wear */
+  approx?: boolean;
 };
 export type InputInfo = { input: TUInput; skin: Skin | undefined; col?: string; norm: number; price: number | null; problems: string[] };
 export type TUResult = {
@@ -175,9 +177,18 @@ export function computeTradeUp(
   const outcomes = [...map.values()];
   if (total > 0) for (const o of outcomes) o.prob /= total;
   const flagOut = cfg.st ? 's' : '';
-  let missingPrices = 0;
+  let missingPrices = 0, approxPrices = 0;
   for (const o of outcomes) {
     o.price = skinPrice(prices, o.skin, flagOut, o.wear, opts.source, o.phase);
+    if (o.price == null && !o.skin.vanilla) {
+      // thin markets (e.g. Rust Coat WW): borrow the price of the nearest wear that has one
+      for (const d of [1, -1, 2, -2, 3, -3, 4, -4]) {
+        const w = o.wear + d;
+        if (w < 0 || w > 4 || !o.skin.wears.includes(w)) continue;
+        const p = skinPrice(prices, o.skin, flagOut, w, opts.source, o.phase);
+        if (p != null) { o.price = p; o.approx = true; approxPrices++; break; }
+      }
+    }
     if (o.price == null) missingPrices++;
     o.net = o.price == null ? null : o.price * (1 - opts.fee);
   }
@@ -192,6 +203,7 @@ export function computeTradeUp(
   const roi = profit != null && cost ? profit / cost : null;
   const profitChance = cost == null ? 0 : outcomes.reduce((a, o) => a + (o.net != null && o.net > cost ? o.prob : 0), 0);
   if (missingPrices) warnings.push(`Нет цены для ${missingPrices} исход(ов) — EV не посчитан`);
+  if (approxPrices) warnings.push(`Для ${approxPrices} исход(ов) нет продаж в нужном износе — цена взята по соседнему износу (≈)`);
   if (cfg.mode === 'gold' && outcomes.some((o) => o.phase)) warnings.push('Шансы фаз Doppler приблизительные: Valve их не публикует');
 
   return {
