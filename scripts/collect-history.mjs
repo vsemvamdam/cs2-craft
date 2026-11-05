@@ -32,8 +32,8 @@ function save(db) {
   fs.writeFileSync(OUT + '.tmp', zlib.gzipSync(JSON.stringify(db)));
   fs.renameSync(OUT + '.tmp', OUT);
 }
-/** what is still to fetch: never tried, or failed for a reason that may pass (not «no such item») */
-const pending = (it) => !it || (it.err && it.err !== 404) || it.retry;
+/** what is still to fetch: everything without a price history, except items Steam says don't exist (404) */
+const pending = (it) => !it || !(it.p?.length || it.err === 404);
 
 async function get(url) {
   return fetch(url, {
@@ -112,10 +112,15 @@ async function main() {
         console.log(`${tag} ${short(name)} — ${pts.length} точек с ${String(pts[0][0]).slice(0, 11)}`);
       } else {
         // a page without the chart: either the item really has no sales or Steam served an error page — retry later
-        db.items[name] = { p: [], retry: /error|try again|An error was encountered/i.test(html) || undefined };
+        db.items[name] = { p: [] };
         empty++;
         emptyRun++;
-        console.log(`${tag} ${short(name)} — на странице нет графика`);
+        const title = ((html.match(/<title>([^<]*)<\/title>/i) || [])[1] || '').trim();
+        console.log(`${tag} ${short(name)} — на странице нет графика (${Math.round(html.length / 1024)} КБ, «${short(title || 'без заголовка', 60)}»)`);
+        if (empty === 1) {
+          // keep one sample so we can see what Steam actually sent
+          try { fs.writeFileSync('debug-page.html', html); console.log('   образец страницы сохранён в debug-page.html'); } catch { /* read-only folder */ }
+        }
         if (emptyRun === 8 && ok === 0) {
           console.log('\nУже 8 страниц подряд без графика цен. Возможно, Steam отдаёт заглушку вместо страницы предмета');
           console.log('(например, страницу блокировки провайдера или «ошибка, попробуйте позже»). Откройте ссылку выше в браузере');
