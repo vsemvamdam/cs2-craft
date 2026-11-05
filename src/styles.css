@@ -179,7 +179,31 @@ input[type='range'] { accent-color: var(--accent); }
 .floatbar .ticks { bottom: 0; }
 .floatbar .labels span, .floatbar .ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
 .floatbar .cap { position: absolute; top: 50%; width: 2px; height: 16px; margin-top: -8px; background: var(--text); opacity: 0.8; border-radius: 1px; }
-.floatbar input[type='range'] { position: absolute; inset: 12px 0; width: 100%; opacity: 0; cursor: pointer; margin: 0; }
+.floatbar input[type='range'] { position: absolute; inset: 12px 0; width: 100%; opacity: 0; cursor: pointer; margin: 0; touch-action: none; }
+.floatbar.editable .knob { transition: transform .12s; }
+.floatbar.editable:hover .knob, .floatbar.editable:active .knob { transform: scale(1.15); }
+.floatbar.compact { padding: 9px 0; min-width: 120px; }
+.floatbar.compact .track { height: 8px; }
+.floatbar.compact .labels { font-size: 10px; }
+.floatbar.compact .knob { width: 16px; height: 16px; margin: -8px 0 0 -8px; }
+.floatbar.compact input[type='range'] { inset: -4px 0; height: auto; }
+.wearpick button { padding: 0 9px; font-size: 12px; font-weight: 650; min-width: 34px; }
+.wearpick button:disabled { opacity: .3; cursor: not-allowed; }
+.wearpick { flex-wrap: wrap; height: auto; }
+.wearselect { width: 218px; flex: none; }
+.tu-row { padding: 10px 14px 12px 18px; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px 12px; align-items: center; }
+.tu-row .tu-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.tu-row .tu-actions { display: flex; align-items: center; gap: 8px; }
+.tu-row .tu-float { grid-column: 2 / -1; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.tu-row .tu-float .floatbar { flex: 1; }
+.tu-row .tu-float .input { width: 78px; flex: none; }
+@media (max-width: 620px) {
+  .tu-row { grid-template-columns: auto minmax(0, 1fr); }
+  .tu-row .tu-actions { grid-column: 1 / -1; justify-content: flex-end; }
+  .tu-row .tu-float { grid-column: 1 / -1; flex-wrap: wrap; }
+  .tu-row .tu-float .floatbar { flex-basis: 100%; order: 3; }
+  .wearselect { flex: 1; width: auto; }
+}
 
 /* tables */
 .table { width: 100%; border-collapse: collapse; font-size: 14px; }

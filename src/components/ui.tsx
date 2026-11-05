@@ -56,12 +56,16 @@ export function SkinCard({ s, prices, to, onClick, extra }: { s: Skin; prices: P
 }
 
 /** wiki.cs.money-style float bar: wear segments, the skin's possible range, a knob */
-export function FloatBar({ value, min = 0, max = 1, onChange }: { value: number | null; min?: number; max?: number; onChange?: (v: number) => void }) {
+export function FloatBar({ value, min = 0, max = 1, onChange, compact }: { value: number | null; min?: number; max?: number; onChange?: (v: number) => void; compact?: boolean }) {
+  // the slider spans the whole 0–1 scale (same as the picture); values outside the skin's range snap to it
+  const clamp = (v: number) => +Math.min(max, Math.max(min, v)).toFixed(4);
   return (
-    <div className="floatbar">
-      <div className="labels">
-        {WEARS.map((w) => <span key={w.short} style={{ left: `${((w.min + w.max) / 2) * 100}%` }}>{w.short}</span>)}
-      </div>
+    <div className={'floatbar' + (compact ? ' compact' : '') + (onChange ? ' editable' : '')}>
+      {!compact && (
+        <div className="labels">
+          {WEARS.map((w) => <span key={w.short} style={{ left: `${((w.min + w.max) / 2) * 100}%` }}>{w.short}</span>)}
+        </div>
+      )}
       <div className="track">
         {WEARS.map((w) => <div key={w.short} className="seg-w" style={{ width: `${(w.max - w.min) * 100}%`, background: w.color }} />)}
         {min > 0 && <div className="shade" style={{ left: 0, width: `${min * 100}%` }} />}
@@ -69,13 +73,50 @@ export function FloatBar({ value, min = 0, max = 1, onChange }: { value: number 
       </div>
       {min > 0 && <div className="cap" style={{ left: `${min * 100}%` }} />}
       {max < 1 && <div className="cap" style={{ left: `${max * 100}%` }} />}
-      {value != null && <div className="knob" style={{ left: `${Math.min(1, Math.max(0, value)) * 100}%`, top: 'calc(50% + 0px)' }} />}
-      <div className="ticks">
-        {[0.07, 0.15, 0.38, 0.45].map((t) => <span key={t} style={{ left: `${t * 100}%` }}>{t.toFixed(2)}</span>)}
-      </div>
-      {onChange && (
-        <input type="range" min={min} max={max} step={0.0001} value={value ?? min} onChange={(e) => onChange(parseFloat(e.target.value))} aria-label="Флоат" />
+      {value != null && <div className="knob" style={{ left: `${Math.min(1, Math.max(0, value)) * 100}%` }} />}
+      {!compact && (
+        <div className="ticks">
+          {[0.07, 0.15, 0.38, 0.45].map((t) => <span key={t} style={{ left: `${t * 100}%` }}>{t.toFixed(2)}</span>)}
+        </div>
       )}
+      {onChange && (
+        <input type="range" min={0} max={1} step={0.0005} value={value ?? min} onChange={(e) => onChange(clamp(parseFloat(e.target.value)))} aria-label="Флоат" />
+      )}
+    </div>
+  );
+}
+
+/** wear buttons FN…BS: picks a float in the middle of that wear within the skin's float range */
+export function WearPicker({ value, min = 0, max = 1, onChange, full, select }: { value: number; min?: number; max?: number; onChange: (v: number) => void; full?: boolean; select?: boolean }) {
+  const cur = value < 0.07 ? 0 : value < 0.15 ? 1 : value < 0.38 ? 2 : value < 0.45 ? 3 : 4;
+  const pick = (i: number) => {
+    const w = WEARS[i];
+    const lo = Math.max(min, w.min), hi = Math.min(max, w.max);
+    if (hi > lo) onChange(+(lo + (hi - lo) / 2).toFixed(4));
+  };
+  if (select) {
+    return (
+      <select className="select small wearselect" value={cur} onChange={(e) => pick(+e.target.value)} aria-label="Качество" style={{ borderLeft: `3px solid ${WEARS[cur].color}` }}>
+        {WEARS.map((w, i) => {
+          const ok = Math.min(max, w.max) > Math.max(min, w.min);
+          return <option key={w.short} value={i} disabled={!ok}>{w.ru}{ok ? '' : ' — нет'}</option>;
+        })}
+      </select>
+    );
+  }
+  return (
+    <div className="seg wearpick" role="radiogroup" aria-label="Качество">
+      {WEARS.map((w, i) => {
+        const lo = Math.max(min, w.min), hi = Math.min(max, w.max);
+        const ok = hi > lo;
+        return (
+          <button key={w.short} role="radio" aria-checked={cur === i} className={cur === i ? 'on' : ''} disabled={!ok} title={`${w.ru}${ok ? ` · ${lo.toFixed(2)}–${hi.toFixed(2)}` : ' — у этого скина не бывает'}`}
+            style={cur === i ? { boxShadow: `inset 0 -2px 0 ${w.color}` } : undefined}
+            onClick={() => pick(i)}>
+            {full ? w.ru : w.short}
+          </button>
+        );
+      })}
     </div>
   );
 }

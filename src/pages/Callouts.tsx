@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { usePanZoom } from '../lib/panzoom';
 import { Spinner } from '../components/ui';
 import { useAsync } from '../lib/hooks';
 import { href } from '../lib/router';
@@ -59,6 +60,8 @@ function MapCallouts({ m, maps }: { m: MapInfo; maps: MapInfo[] }) {
     return hay.includes(nq);
   };
   const cellPx = g ? g.cell / m.scale : 0;
+  const pz = usePanZoom(1024, 6);
+  const ls = 1 / Math.pow(pz.k, 0.6);
 
   return (
     <div className="stack" style={{ gap: 14 }}>
@@ -89,7 +92,12 @@ function MapCallouts({ m, maps }: { m: MapInfo; maps: MapInfo[] }) {
       </div>
       <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1.2fr) minmax(320px, 1fr)', alignItems: 'start' }}>
         <div className="card nd-radar" style={{ position: 'sticky', top: 76 }}>
-          <svg viewBox="0 0 1024 1024" style={{ width: '100%', display: 'block' }} onMouseLeave={() => setHover('')}>
+          <div className="nd-zoom">
+            <button className="btn small icon" onClick={() => pz.zoomBy(1.6)} aria-label="Приблизить" title="Приблизить (колесо мыши, щипок)">+</button>
+            <button className="btn small icon" onClick={() => pz.zoomBy(1 / 1.6)} aria-label="Отдалить" title="Отдалить">−</button>
+            <button className="btn small icon" onClick={pz.reset} aria-label="Вся карта" title="Вся карта" disabled={pz.k <= 1.01}>⤢</button>
+          </div>
+          <svg ref={pz.ref} viewBox={pz.viewBox} style={{ width: '100%', display: 'block', touchAction: pz.touchAction, aspectRatio: '1 / 1', cursor: pz.k > 1.01 ? 'grab' : undefined }} {...pz.handlers} onMouseLeave={() => setHover('')}>
             <image href={lower && m.lower ? m.lower.radar : m.radar} x="0" y="0" width="1024" height="1024" />
             {g && zones && g.cells.map(([cx, cy, cz, ni], i) => {
               const id = g.names[ni];
@@ -103,7 +111,7 @@ function MapCallouts({ m, maps }: { m: MapInfo; maps: MapInfo[] }) {
               const p = project(c[0], c[1]);
               const dim = (hover && hover !== id) || (nq && !match(id));
               return (
-                <text key={id} x={p.px} y={p.py} className="nd-callout" textAnchor="middle" dominantBaseline="middle" style={{ opacity: dim ? 0.35 : 1, fontSize: hover === id ? 19 : 15 }}>
+                <text key={id} x={p.px} y={p.py} className="nd-callout" textAnchor="middle" dominantBaseline="middle" style={{ opacity: dim ? 0.35 : 1, fontSize: (hover === id ? 19 : 15) * ls, strokeWidth: 4 * ls }}>
                   {placeName(names, m.id, id, lang)}
                 </text>
               );

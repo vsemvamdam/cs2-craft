@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Price, Spinner, NoPricesNotice, Updated, rarityColor } from '../components/ui';
+import { FloatBar, Price, Spinner, NoPricesNotice, Updated, WearPicker, rarityColor } from '../components/ui';
 import { norm, skinText } from '../components/Layout';
 import { imgUrl, type Indexed, type Prices, type Skin } from '../lib/data';
 import { copy, useDB, useDebounced, useLocal, usePrices } from '../lib/hooks';
@@ -191,18 +191,29 @@ function InputRow({ info, prices, i, upd, remove, dup, canDup }: { info: ReturnT
   useEffect(() => setF(String(info.input.float)), [info.input.float]);
   if (!s) return <div className="row" style={{ padding: '10px 18px' }}><span className="bad">Неизвестный предмет</span><button className="btn small" onClick={() => remove(i)}>×</button></div>;
   const wear = wearOf(info.input.float);
+  const setFloat = (v: number) => { setF(String(v)); upd(i, { float: v }); };
   return (
-    <div className="row" style={{ padding: '10px 14px 10px 18px', borderBottom: '1px solid var(--border)', flexWrap: 'nowrap', gap: 10 }}>
+    <div className="tu-row">
       <a href={href(`/skin/${s.id}`)}><img className="thumb" src={imgUrl(s.img, 128)} alt="" style={{ borderBottom: `2px solid ${rarityColor(s)}` }} /></a>
-      <div className="grow">
-        <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={s.name}>{s.name}</div>
-        <div className="tiny muted">{WEARS[wear].short} · {s.mn.toFixed(2)}–{s.mx.toFixed(2)} · норм. <span className="num">{info.norm.toFixed(3)}</span>{info.problems.length ? <span className="bad"> · {info.problems[0]}</span> : null}</div>
+      <div className="tu-main">
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={s.name}>{s.name}</div>
+          <div className="tiny muted">{WEARS[wear].ru} · диапазон {s.mn.toFixed(2)}–{s.mx.toFixed(2)} · норм. <span className="num">{info.norm.toFixed(3)}</span>{info.problems.length ? <span className="bad"> · {info.problems[0]}</span> : null}</div>
+        </div>
       </div>
-      <input className="input small num" style={{ width: 86 }} value={f} title="Флоат" onChange={(e) => { setF(e.target.value); const v = parseFloat(e.target.value.replace(',', '.')); if (!Number.isNaN(v)) upd(i, { float: v }); }} />
-      <PriceInput cents={info.price} overridden={info.input.price != null} prices={prices} currency={currency} onChange={(c) => upd(i, { price: c })} />
-      <label className="check tiny" title="Сувенирная версия"><input type="checkbox" checked={!!info.input.sv} onChange={(e) => upd(i, { sv: e.target.checked })} />SV</label>
-      <button className="btn small icon" style={{ width: 30 }} title="Копия" disabled={!canDup} onClick={() => dup(i)}>⧉</button>
-      <button className="btn small icon danger" style={{ width: 30 }} title="Убрать" onClick={() => remove(i)}>×</button>
+      <div className="tu-actions">
+        <PriceInput cents={info.price} overridden={info.input.price != null} prices={prices} currency={currency} onChange={(c) => upd(i, { price: c })} />
+        <label className="check tiny" title="Сувенирная версия"><input type="checkbox" checked={!!info.input.sv} onChange={(e) => upd(i, { sv: e.target.checked })} />SV</label>
+        <button className="btn small icon" style={{ width: 30 }} title="Копия" disabled={!canDup} onClick={() => dup(i)}>⧉</button>
+        <button className="btn small icon danger" style={{ width: 30 }} title="Убрать" onClick={() => remove(i)}>×</button>
+      </div>
+      <div className="tu-float">
+        <WearPicker select value={info.input.float} min={s.mn} max={s.mx} onChange={setFloat} />
+        <FloatBar compact value={info.input.float} min={s.mn} max={s.mx} onChange={setFloat} />
+        <input className="input small num" value={f} title="Точный флоат" inputMode="decimal"
+          onChange={(e) => { setF(e.target.value); const v = parseFloat(e.target.value.replace(',', '.')); if (!Number.isNaN(v)) upd(i, { float: Math.min(s.mx, Math.max(s.mn, v)) }); }}
+          onBlur={() => setF(String(info.input.float))} />
+      </div>
     </div>
   );
 }
@@ -274,9 +285,16 @@ function Picker({ db, prices, cfg, rarity, onAdd, onClose }: { db: Indexed; pric
               {cols.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
-          <div className="row">
+          <div className="row" style={{ gap: 10 }}>
+            <span className="small muted">Качество</span>
+            <WearPicker full value={fl} onChange={(v) => setFloat(String(v))} />
+          </div>
+          <div className="row" style={{ gap: 10, flexWrap: 'nowrap' }}>
             <span className="small muted">Флоат</span>
-            <input className="input small num" style={{ width: 90 }} value={float} onChange={(e) => setFloat(e.target.value)} />
+            <FloatBar compact value={fl} onChange={(v) => setFloat(String(v))} />
+            <input className="input small num" style={{ width: 80 }} value={float} inputMode="decimal" onChange={(e) => setFloat(e.target.value)} />
+          </div>
+          <div className="row">
             <span className="small muted">Количество</span>
             <div className="seg">{[1, 5, 10].filter((x) => x <= (cfg.mode === 'gold' ? 5 : 10)).map((x) => <button key={x} className={n === x ? 'on' : ''} onClick={() => setN(x)}>×{x}</button>)}</div>
             <span className="small muted">Сортировка</span>

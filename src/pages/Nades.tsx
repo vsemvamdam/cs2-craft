@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { usePanZoom } from '../lib/panzoom';
 import { Spinner } from '../components/ui';
 import { copy, useAsync } from '../lib/hooks';
 import { href, setQuery, useRoute } from '../lib/router';
@@ -279,7 +280,7 @@ function MapView({ m, maps }: { m: MapInfo; maps: MapInfo[] }) {
           <div className="nd-main">
             <Radar m={m} targets={visTargets} tg={tg} lineups={tgLineups} selected={selected} grid={showCallouts ? grid.data || null : null} names={names} lang={lang}
               onTarget={(i) => setQuery({ tg: i === tg ? null : String(i), id: null })} onPick={(id) => setQuery({ id })} />
-            <div className="tiny muted" style={{ marginTop: 6 }}>Кружки — куда падают гранаты (размер — сколько раз кидали). Нажмите на кружок: появятся позиции, откуда его кидают, нажмите на позицию — откроется 3D-повтор.</div>
+            <div className="tiny muted" style={{ marginTop: 6 }}>Кружки — куда падают гранаты (размер — сколько раз кидали). Нажмите на кружок: карта приблизится и покажет позиции, откуда его кидают; нажмите на позицию — откроется 3D-повтор. Приближение — колесо мыши или щипок двумя пальцами, перемещение — перетаскиванием, двойной клик или двойной тап — ближе.</div>
           </div>
 
           <div className="nd-list card">
@@ -338,21 +339,38 @@ function Radar({ m, targets, tg, lineups, selected, grid, names, lang, onTarget,
     if (!grid) return [];
     return Object.entries(grid.centers).map(([id, c]) => ({ id, p: project(m, c[0], c[1]), name: placeName(names, m.id, id, lang) }));
   }, [grid, names, lang, m]);
+  const pz = usePanZoom(1024, 6);
+  // markers and labels shrink a little as you zoom in, so close points separate
+  const s = 1 / Math.pow(pz.k, 0.72);
+  // selecting a landing spot zooms to it and the positions it is thrown from; clearing zooms back out
+  const fitKey = cur ? `${cur.i}|${lineups.length}` : '';
+  useEffect(() => {
+    if (!cur) { pz.reset(); return; }
+    const pts = [project(m, cur.t[1], cur.t[2]), ...lineups.map((l) => project(m, l.from[0], l.from[1]))];
+    const xs = pts.map((p) => p.px), ys = pts.map((p) => p.py);
+    pz.fit(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fitKey, m.id]);
   return (
     <div className="card nd-radar">
-      <svg viewBox="0 0 1024 1024" style={{ width: '100%', display: 'block' }}>
+      <div className="nd-zoom">
+        <button className="btn small icon" onClick={() => pz.zoomBy(1.6)} aria-label="Приблизить" title="Приблизить (колесо мыши, щипок)">+</button>
+        <button className="btn small icon" onClick={() => pz.zoomBy(1 / 1.6)} aria-label="Отдалить" title="Отдалить">−</button>
+        <button className="btn small icon" onClick={pz.reset} aria-label="Вся карта" title="Вся карта" disabled={pz.k <= 1.01}>⤢</button>
+      </div>
+      <svg ref={pz.ref} viewBox={pz.viewBox} style={{ width: '100%', display: 'block', touchAction: pz.touchAction, cursor: pz.k > 1.01 ? 'grab' : undefined, aspectRatio: '1 / 1' }} {...pz.handlers}>
         <image href={m.radar} x="0" y="0" width="1024" height="1024" />
         {labels.map((x) => (
-          <text key={x.id} x={x.p.px} y={x.p.py} className="nd-callout" textAnchor="middle" dominantBaseline="middle">{x.name}</text>
+          <text key={x.id} x={x.p.px} y={x.p.py} className="nd-callout" textAnchor="middle" dominantBaseline="middle" style={{ fontSize: 15 * Math.pow(s, 0.85), strokeWidth: 4 * s }}>{x.name}</text>
         ))}
         {targets.map(({ i, t, n }) => {
           const p = project(m, t[1], t[2]);
-          const r = 9 + 13 * Math.sqrt(n / max);
+          const r = (9 + 13 * Math.sqrt(n / max)) * s;
           const on = i === tg;
           const dim = tg >= 0 && !on;
           return (
             <g key={i} transform={`translate(${p.px},${p.py})`} style={{ cursor: 'pointer', opacity: dim ? 0.35 : 1 }} onClick={() => onTarget(i)}>
-              <circle r={on ? r + 4 : r} fill={NADE_TYPES[t[0]]?.color} fillOpacity={on ? 0.95 : 0.6} stroke={on ? '#fff' : '#000'} strokeWidth={on ? 3 : 1.4} />
+              <circle r={on ? r + 4 * s : r} fill={NADE_TYPES[t[0]]?.color} fillOpacity={on ? 0.95 : 0.6} stroke={on ? '#fff' : '#000'} strokeWidth={(on ? 3 : 1.4) * s} />
               <g transform={`translate(${-r * 0.55},${-r * 0.55}) scale(${(r * 1.1) / 20})`} style={{ pointerEvents: 'none' }}>
                 <NadeGlyph type={t[0]} />
               </g>
@@ -367,9 +385,9 @@ function Radar({ m, targets, tg, lineups, selected, grid, names, lang, onTarget,
           const sideC = l.side === 'T' ? '#e0a64e' : '#6fa3e0';
           return (
             <g key={l.id} style={{ cursor: 'pointer' }} onClick={() => onPick(l.id)}>
-              <line x1={f.px} y1={f.py} x2={to.px} y2={to.py} stroke={on ? '#fff' : sideC} strokeWidth={on ? 3 : 2} strokeDasharray="7 6" opacity={0.95} />
-              <circle cx={f.px} cy={f.py} r={on ? 11 : 8} fill={sideC} stroke="#000" strokeWidth="2" />
-              <circle cx={f.px} cy={f.py} r={18} fill="transparent" />
+              <line x1={f.px} y1={f.py} x2={to.px} y2={to.py} stroke={on ? '#fff' : sideC} strokeWidth={(on ? 3 : 2) * s} strokeDasharray={`${7 * s} ${6 * s}`} opacity={0.95} />
+              <circle cx={f.px} cy={f.py} r={(on ? 11 : 8) * s} fill={sideC} stroke="#000" strokeWidth={2 * s} />
+              <circle cx={f.px} cy={f.py} r={16 * s} fill="transparent" />
               <title>{l.side} · {MOVES[l.move] || l.move} · {l.n} бросков</title>
             </g>
           );

@@ -14,7 +14,12 @@
 .nd-types button.on { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 45%, transparent); color: var(--text); }
 .nd-types button.on b { color: var(--text); }
 .nd-main { min-width: 0; }
-.nd-radar { overflow: hidden; background: #0b0d10; }
+.nd-radar { overflow: hidden; background: #0b0d10; position: relative; }
+.nd-radar svg { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.nd-radar svg:active { cursor: grabbing !important; }
+.nd-zoom { position: absolute; top: 10px; right: 10px; z-index: 2; display: flex; flex-direction: column; gap: 4px; }
+.nd-zoom .btn { width: 34px; height: 34px; font-size: 18px; background: rgba(20, 22, 27, .82); color: #fff; border-color: rgba(255, 255, 255, .14); backdrop-filter: blur(4px); }
+.nd-zoom .btn:disabled { opacity: .45; }
 .nd-callout { font: 600 15px var(--font); fill: #fff; paint-order: stroke; stroke: rgba(0, 0, 0, .85); stroke-width: 4px; pointer-events: none; letter-spacing: .01em; }
 .nd-list { position: sticky; top: 76px; overflow: hidden; }
 .nd-list-body { max-height: calc(100vh - 170px); overflow: auto; }
