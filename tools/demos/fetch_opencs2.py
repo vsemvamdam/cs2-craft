@@ -98,7 +98,12 @@ def main(argv=None) -> int:
             if not mp:
                 continue
             ev = str(r[ev_col]) if ev_col else ""
-            cand.append({"path": full, "map": mp, "event": ev, "date": str(r[date_col])[:10] if date_col else "", "top": bool(TOP.search(ev))})
+            try:
+                stars = int(r["stars"]) if "stars" in cols and str(r["stars"]) not in ("", "nan", "None") else 0
+            except (TypeError, ValueError):
+                stars = 0
+            top = bool(TOP.search(ev)) and not re.search(r"qualifier|academy|series \d", ev, re.I)
+            cand.append({"path": full, "map": mp, "event": ev, "date": str(r[date_col])[:10] if date_col else "", "top": top, "stars": stars})
     else:  # no usable metadata: fall back to file paths only
         for d in dems:
             mp = map_of(d)
@@ -108,7 +113,8 @@ def main(argv=None) -> int:
         report["top_events"] = sorted({c["event"] for c in cand if c["top"]})[:40]
     picked = []
     for mp in ACTIVE:
-        pool = sorted((c for c in cand if c["map"] == mp), key=lambda c: (c["top"], c["date"]), reverse=True)
+        # HLTV "stars" = how big the match is; then tier-1 events; then newest
+        pool = sorted((c for c in cand if c["map"] == mp), key=lambda c: (c.get("stars", 0), c["top"], c["date"]), reverse=True)
         picked += pool[: args.per_map]
     report["candidates"] = len(cand)
     report["picked"] = [p["path"] for p in picked]
