@@ -1,0 +1,130 @@
+/* «Мои матчи» (src/components/MyMatches.tsx) — only site tokens from styles.css */
+.mm { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.mm > * { min-width: 0; }
+.mm-label { text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+.mm-name { color: var(--text); }
+
+/* filters */
+.mm-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px 14px; }
+.mm-seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.mm-seg::-webkit-scrollbar { display: none; }
+.mm-count { margin-left: auto; }
+.mm-short, .mm-kda-x { display: none; }
+
+/* rating + summary */
+.mm-top { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; align-items: stretch; }
+.mm-rating { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.mm-rating-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.mm-rating-meta { display: flex; gap: 14px; flex-wrap: wrap; }
+.mm-rn { font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 750; color: var(--rc, var(--text)); letter-spacing: -0.02em; white-space: nowrap; }
+.mm-rn small { font-size: 0.66em; font-weight: 650; opacity: 0.85; }
+.mm-rn-l { font-size: 38px; line-height: 1; }
+.mm-rn-s { font-size: 14px; }
+.mm-delta { font-size: 13px; font-weight: 650; }
+.mm-chart { position: relative; height: 230px; margin: 0 -4px; }
+.mm-tip { position: absolute; z-index: 3; min-width: 170px; max-width: 220px; padding: 8px 10px; border-radius: var(--radius-s); background: var(--surface-3); border: 1px solid var(--border); box-shadow: var(--shadow); pointer-events: none; display: flex; flex-direction: column; gap: 1px; }
+.mm-form-wrap { display: flex; flex-direction: column; gap: 6px; margin-top: auto; }
+.mm-form { display: flex; gap: 4px; flex-wrap: wrap; }
+.mm-form span { width: 22px; height: 22px; border-radius: 5px; display: grid; place-items: center; font-size: 11px; font-weight: 750; }
+.mm-chip-w { background: color-mix(in srgb, var(--good) 20%, transparent); color: var(--good); }
+.mm-chip-l { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
+.mm-chip-t { background: var(--surface-3); color: var(--muted); }
+.mm-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-content: start; padding: 14px; }
+.mm-kpi { display: flex; flex-direction: column; gap: 1px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); min-width: 0; }
+.mm-kpi b { font-size: 21px; line-height: 1.25; white-space: nowrap; }
+.mm-kpi span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* maps + weapons */
+.mm-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.mm-two > * { min-width: 0; }
+.mm-table td, .mm-table th { padding: 9px 12px; }
+.mm-wr { display: grid; grid-template-columns: minmax(48px, 1fr) 38px auto; gap: 8px; align-items: center; min-width: 150px; }
+.mm-wpn { display: flex; flex-direction: column; gap: 5px; min-width: 120px; }
+.mm-wpn .bar { height: 4px; max-width: 160px; }
+
+/* match list */
+.mm-list { display: flex; flex-direction: column; }
+.mm-row { display: grid; grid-template-columns: 4px minmax(150px, 1.6fr) 64px 92px 54px 56px 52px 54px minmax(96px, 0.9fr) 18px; gap: 12px; align-items: center; width: 100%; padding: 10px 16px 10px 0; border: 0; border-bottom: 1px solid var(--border); background: none; text-align: left; cursor: pointer; color: var(--text); font: inherit; font-size: 14px; }
+.mm-row:hover, .mm-row.open { background: var(--surface-2); }
+.mm-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.mm-row-head { cursor: default; padding-top: 8px; padding-bottom: 8px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+.mm-row-head:hover { background: none; }
+.mm-row .r { text-align: right; white-space: nowrap; }
+.mm-strip { align-self: stretch; border-radius: 0 3px 3px 0; min-height: 34px; }
+.mm-what { display: flex; flex-direction: column; min-width: 0; }
+.mm-what > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mm-score { font-weight: 700; font-size: 15px; }
+.mm-c-rating { display: inline-flex; justify-content: flex-end; align-items: baseline; gap: 6px; }
+.mm-chev { color: var(--faint); font-size: 12px; text-align: center; }
+.mm-bg-w { background: var(--good); }
+.mm-bg-l { background: var(--bad); }
+.mm-bg-t { background: var(--faint); }
+.mm-fg-w { color: var(--good); }
+.mm-fg-l { color: var(--bad); }
+.mm-fg-t { color: var(--muted); }
+.mm-fg-us { color: var(--good); }
+.mm-fg-them { color: var(--bad); }
+
+/* match detail */
+.mm-detail { display: flex; flex-direction: column; gap: 14px; padding: 16px; background: var(--bg-2); border-bottom: 1px solid var(--border); }
+.mm-rh-wrap { display: flex; flex-direction: column; gap: 6px; }
+.mm-rh { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
+.mm-rh i { width: 14px; height: 20px; border-radius: 3px; display: block; opacity: 0.85; }
+.mm-rh-sep { width: 1px; height: 24px; margin: 0 4px; background: var(--border); }
+.mm-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px 16px; margin: 0; }
+.mm-facts dd { margin: 0; }
+.mm-sb { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-s); }
+.mm-sb-table td, .mm-sb-table th { padding: 7px 10px; font-size: 13px; }
+.mm-sb-table tr.mm-sb-team td { padding-top: 12px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.mm-sb-table tbody + tbody tr.mm-sb-team td { border-top: 1px solid var(--border); }
+.mm-sb-table tbody tr:last-child td { border-bottom: 0; }
+.mm-sb-table tr.mm-me td { background: var(--accent-soft); }
+.mm-pname a { font-weight: 600; display: inline-block; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.mm-pname a:hover { color: var(--link); }
+.mm-actions { gap: 8px; }
+.mm-code { overflow-wrap: anywhere; }
+
+/* empty state */
+.mm-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 28px 22px; }
+.mm-empty p { max-width: 640px; }
+.mm-empty-mark { display: flex; gap: 4px; margin-bottom: 4px; }
+.mm-empty-mark span { width: 18px; height: 18px; border-radius: 4px; background: var(--surface-3); }
+.mm-empty-mark span:nth-child(2), .mm-empty-mark span:nth-child(4) { background: var(--accent-soft); }
+
+@media (max-width: 1100px) {
+  .mm-row { grid-template-columns: 4px minmax(140px, 1fr) 60px 88px 52px 54px minmax(90px, auto) 16px; }
+  .mm-c-hs, .mm-c-kast, .mm-row-head > :nth-child(7), .mm-row-head > :nth-child(8) { display: none; }
+}
+@media (max-width: 980px) {
+  .mm-top, .mm-two { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .mm-filters { padding: 10px; gap: 8px; }
+  .mm-seg { flex: 1 1 100%; }
+  .mm-seg button { flex: 1 1 auto; padding: 0 8px; }
+  .mm-long { display: none; }
+  .mm-short, .mm-kda-x { display: inline; }
+  .mm-count { margin-left: auto; }
+  .mm-table td, .mm-table th { padding: 8px 8px; font-size: 13px; }
+  .mm-table th { font-size: 11px; letter-spacing: 0.02em; }
+  .mm-wr { grid-template-columns: minmax(36px, 1fr) 34px; min-width: 96px; gap: 6px; }
+  .mm-wr .faint { display: none; }
+  .mm-wpn { min-width: 0; }
+  .mm-wpn b { white-space: nowrap; }
+  .mm-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 10px; }
+  .mm-kpi b { font-size: 18px; }
+  .mm-rn-l { font-size: 32px; }
+  .mm-chart { height: 200px; }
+  .mm-row-head { display: none; }
+  .mm-row { grid-template-columns: 4px minmax(0, 1fr) auto 14px; grid-template-areas: 'strip what score chev' 'strip kda rating chev'; row-gap: 2px; column-gap: 10px; padding: 10px 12px 10px 0; }
+  .mm-strip { grid-area: strip; }
+  .mm-what { grid-area: what; }
+  .mm-score { grid-area: score; }
+  .mm-kda { grid-area: kda; text-align: left !important; font-size: 13px; color: var(--muted); }
+  .mm-c-rating { grid-area: rating; }
+  .mm-chev { grid-area: chev; }
+  .mm-c-kd, .mm-c-adr { display: none; }
+  .mm-detail { padding: 12px 10px; }
+  .mm-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mm-pname a { max-width: 110px; }
+}
