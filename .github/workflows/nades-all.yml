@@ -11,10 +11,10 @@ on:
     inputs:
       limit:
         description: 'Сколько демок за запуск'
-        default: '600'
+        default: '480'
       shards:
         description: 'Параллельных задач'
-        default: '20'
+        default: '16'
   schedule:
     - cron: '7 */2 * * *'
   push:
@@ -47,7 +47,7 @@ jobs:
       - run: pip install huggingface_hub pandas pyarrow
       - run: scripts/store.sh pull nades-proc
       - id: p
-        run: python3 tools/demos/opencs2.py plan --limit "${{ inputs.limit || '600' }}" --shards "${{ inputs.shards || '20' }}" --out plan.json
+        run: python3 tools/demos/opencs2.py plan --limit "${{ inputs.limit || '480' }}" --shards "${{ inputs.shards || '16' }}" --out plan.json
       - uses: actions/upload-artifact@v4
         with:
           name: plan
@@ -60,7 +60,7 @@ jobs:
     timeout-minutes: 300
     strategy:
       fail-fast: false
-      max-parallel: 20
+      max-parallel: 16
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
