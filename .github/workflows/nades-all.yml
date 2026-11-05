@@ -2,18 +2,18 @@ name: Раскидки — вся база про-демок
 
 # Разбирает весь открытый архив OpenCS2 (Hugging Face blanchon/opencs2_dataset_demo, CC BY 4.0,
 # ~2000 карт HLTV) порциями: каждый запуск — до LIMIT демок в SHARDS параллельных задачах.
-# Запускается каждые 4 часа, пока не разберёт всё; уже разобранное не трогает.
+# Запускается каждые 2 часа, пока не разберёт всё; уже разобранное не трогает.
 on:
   workflow_dispatch:
     inputs:
       limit:
         description: 'Сколько демок за запуск'
-        default: '120'
+        default: '320'
       shards:
         description: 'Параллельных задач'
-        default: '8'
+        default: '16'
   schedule:
-    - cron: '7 */4 * * *'
+    - cron: '7 */2 * * *'
   push:
     branches: [main]
     paths: ['tools/demos/opencs2.py', '.github/workflows/nades-all.yml']
@@ -41,7 +41,7 @@ jobs:
           python-version: '3.12'
       - run: pip install huggingface_hub pandas pyarrow
       - id: p
-        run: python3 tools/demos/opencs2.py plan --limit "${{ inputs.limit || '120' }}" --shards "${{ inputs.shards || '8' }}" --out plan.json
+        run: python3 tools/demos/opencs2.py plan --limit "${{ inputs.limit || '320' }}" --shards "${{ inputs.shards || '16' }}" --out plan.json
       - uses: actions/upload-artifact@v4
         with:
           name: plan
@@ -54,7 +54,7 @@ jobs:
     timeout-minutes: 300
     strategy:
       fail-fast: false
-      max-parallel: 8
+      max-parallel: 16
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4

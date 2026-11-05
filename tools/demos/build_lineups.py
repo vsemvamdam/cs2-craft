@@ -37,7 +37,7 @@ def seed_from_public():
     n = 0
     for f in OUT.glob("de_*.json"):
         d = json.loads(f.read_text(encoding="utf-8"))
-        if "throws" not in d:
+        if not isinstance(d.get("throws"), list):  # already a v2 lineup file
             continue
         by_demo = defaultdict(list)
         for t in d["throws"]:
