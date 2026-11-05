@@ -152,6 +152,11 @@ async function main() {
     statuses[r.status] = (statuses[r.status] || 0) + 1;
     if (r.status === 429) {
       consecutive429++;
+      if (ok + empty === 0 && consecutive429 >= 4) {
+        // Steam answers 429 to every market request from datacenter IPs (GitHub Actions) — don't burn 5 hours
+        console.error('Steam отвечает 429 на все запросы истории с этого адреса (серверы GitHub). Историю нужно собирать с обычного домашнего подключения — см. README, «Полная история цен».');
+        break;
+      }
       delay = Math.min(delay * 1.4, 15000);
       const wait = Math.min(60000 * consecutive429, 600000);
       console.warn(`429 — waiting ${wait / 1000}s (delay now ${Math.round(delay)}ms)`);

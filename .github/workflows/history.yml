@@ -3,8 +3,8 @@ name: История цен Steam
 # Полная история сделок Steam Market с первой продажи каждого предмета.
 # Нужен секрет STEAM_REFRESH_TOKEN (npm run steam-login) или STEAM_LOGIN_SECURE.
 on:
-  schedule:
-    - cron: '47 2,8,14,20 * * *'
+  # Расписание выключено: Steam отвечает 429 на все запросы истории с адресов GitHub Actions
+  # (проверено 05.11.2026 — 0 предметов за 5 часов). Запуск вручную оставлен для проверки.
   workflow_dispatch:
 
 permissions:
