@@ -1,0 +1,13 @@
+{
+  "name": "cs2-craft-maps3d",
+  "private": true,
+  "type": "module",
+  "description": "Builds textured CS2 maps for the 3D replay from Source 2 Viewer glTF exports",
+  "dependencies": {
+    "@gltf-transform/core": "4.5.1",
+    "@gltf-transform/extensions": "4.5.1",
+    "@gltf-transform/functions": "4.5.1",
+    "meshoptimizer": "0.22.0",
+    "sharp": "0.33.5"
+  }
+}
