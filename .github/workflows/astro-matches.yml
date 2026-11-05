@@ -7,12 +7,8 @@ name: Астро-проверка матчей
 # expandtemplates для названий команд (≥31 с между ними, как для parse).
 on:
   workflow_dispatch:
-  push:
-    branches: [astro-matches]
-    paths:
-      - '.github/workflows/astro-matches.yml'
-      - 'scripts/fetch-matches-hist.mjs'
-      - 'tools/astro/**'
+  schedule:
+    - cron: '17 4 * * 1'   # раз в неделю дозагрузить новые турниры и пересчитать
 
 permissions:
   contents: write

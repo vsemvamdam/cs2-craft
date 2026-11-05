@@ -151,11 +151,14 @@ def analyze(idx: pd.DataFrame, astro: pd.DataFrame, out: Path, title: str):
         f = df[c].to_numpy()
         for k, s in y.items():
             yy = s.to_numpy()
-            full = shift_test(yy, f, rng=rng)
+            # w = 1: every admissible shift exactly once, p from the studentized null (calibrated far into the tail —
+            # needed for ~400 tests under BH); see astrolib.shift_test
+            ones = np.ones_like(yy)
+            full = shift_test(yy, f, rng=rng, w=ones)
             if not full:
                 continue
-            a = shift_test(yy[:split], f[:split], n_perm=1000, rng=rng)
-            b = shift_test(yy[split:], f[split:], n_perm=1000, rng=rng)
+            a = shift_test(yy[:split], f[:split], rng=rng, w=ones[:split])
+            b = shift_test(yy[split:], f[split:], rng=rng, w=ones[split:])
             res.append({"feature": c, "label": feature_label(c), "metric": k, **full,
                         "p_first": a["p"] if a else None, "diff_first": a["diff"] if a else None,
                         "p_last": b["p"] if b else None, "diff_last": b["diff"] if b else None})
