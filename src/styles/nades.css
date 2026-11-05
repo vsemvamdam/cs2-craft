@@ -69,4 +69,5 @@
 .r3d-cap { position: absolute; left: 10px; bottom: 10px; max-width: 52%; display: flex; flex-direction: column; gap: 2px; padding: 7px 10px; border-radius: 8px; background: rgba(0, 0, 0, .62); color: #fff; font-size: 12px; pointer-events: none; }
 .r3d-cap b { font-size: 13px; }
 .r3d-cap span { color: #b9f5c8; }
+.r3d-tex { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); padding: 4px 12px; border-radius: 99px; background: rgba(0, 0, 0, .6); color: #fff; font-size: 12px; pointer-events: none; white-space: nowrap; }
 .r3d-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

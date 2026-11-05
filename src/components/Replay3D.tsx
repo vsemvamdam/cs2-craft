@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { MeshBVH } from 'three-mesh-bvh';
-import { buildPath, eyeHeight, forward, landPoint, loadMapGeometry, pathAt, toThree, type Throw } from '../lib/map3d';
+import { buildPath, eyeHeight, forward, landPoint, loadMapGeometry, loadTexturedMap, pathAt, TEXTURED_MAPS, toThree, type Throw } from '../lib/map3d';
 
 export type View = 'video' | 'aim' | 'pos' | 'free';
 export const VIEWS: { id: View; ru: string; hint: string }[] = [
@@ -44,6 +44,12 @@ const ease = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 
 export default function Replay3D({ map, th, title, keys }: { map: string; th: Throw; title?: string; keys?: string[] }) {
   const host = useRef<HTMLDivElement>(null);
+  const [texState, setTexState] = useState<'none' | 'loading' | 'ready' | 'error'>('none');
+  const [texProgress, setTexProgress] = useState(0);
+  const [texOn, setTexOn] = useState(true);
+  const texOnRef = useRef(true);
+  const applyTexRef = useRef<() => void>(() => {});
+  useEffect(() => { texOnRef.current = texOn; applyTexRef.current(); }, [texOn]);
   const magRef = useRef<HTMLDivElement>(null);
   const capRef = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View>('video');
@@ -147,6 +153,16 @@ export default function Replay3D({ map, th, title, keys }: { map: string; th: Th
     };
     const mapMat = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms, side: THREE.DoubleSide });
     let mapMesh: THREE.Mesh | null = null;
+    let texGroup: THREE.Group | null = null;
+    // textured map: lights + fog for standard materials (the cardboard shader does its own)
+    const texFog = new THREE.Fog(sky, 3000, 14000);
+    applyTexRef.current = () => {
+      const on = !!texGroup && texOnRef.current;
+      if (texGroup) texGroup.visible = on;
+      if (mapMesh) mapMesh.visible = !on;
+      scene.fog = on ? texFog : null;
+    };
+    const applyTex = () => applyTexRef.current();
 
     const lineGeo = new THREE.BufferGeometry().setFromPoints(path.pts);
     const fullLine = new THREE.Line(lineGeo, new THREE.LineDashedMaterial({ color, dashSize: 10, gapSize: 8, transparent: true, opacity: 0.55, depthTest: false }));
@@ -501,6 +517,19 @@ export default function Replay3D({ map, th, title, keys }: { map: string; th: Th
         mapMesh.updateMatrixWorld();
         setStatus('ready');
         setTimeout(() => { if (!disposed) placeCameras(); }, 30);
+        // real map: textured geometry from the game; the collision mesh stays for raycasts (hidden)
+        if (TEXTURED_MAPS.has(map)) {
+          setTexState('loading');
+          loadTexturedMap(map, (k) => !disposed && setTexProgress(k))
+            .then((grp) => {
+              if (disposed) return;
+              texGroup = grp;
+              scene.add(grp);
+              applyTex();
+              setTexState('ready');
+            })
+            .catch(() => !disposed && setTexState('error'));
+        }
       })
       .catch(() => !disposed && setStatus('error'));
     raf = requestAnimationFrame(frame);
@@ -511,6 +540,7 @@ export default function Replay3D({ map, th, title, keys }: { map: string; th: Th
       ro.disconnect();
       orbit.dispose();
       if (recorder) try { recorder.stop(); } catch { /* ignore */ }
+      if (texGroup) scene.remove(texGroup); // cached for the next replay
       scene.traverse((o) => {
         const m = o as THREE.Mesh;
         if (m.geometry && m !== mapMesh) m.geometry.dispose();
@@ -555,6 +585,7 @@ export default function Replay3D({ map, th, title, keys }: { map: string; th: Th
         )}
         <div className="r3d-badge">{VIEWS.find((x) => x.id === active)?.ru}{held ? ' (удерживается)' : ''}</div>
         {rec !== null && <div className="r3d-rec">● Запись видео {Math.round(rec * 100)}%</div>}
+        {status === 'ready' && texState === 'loading' && <div className="r3d-tex">Загружаю настоящую карту… {Math.round(texProgress * 100)}%</div>}
       </div>
       <div className="r3d-bar">
         <div className="seg">
@@ -566,6 +597,12 @@ export default function Replay3D({ map, th, title, keys }: { map: string; th: Th
           {[0.5, 1, 2].map((s) => <button key={s} className={speed === s ? 'on' : ''} onClick={() => setSpeed(s)}>{s}×</button>)}
         </div>
         <button className="btn small ghost" onClick={download} disabled={rec !== null || status !== 'ready'} title="Записать один повтор в видеофайл">⤓ Скачать видео</button>
+        {texState !== 'none' && (
+          <label className="row small" style={{ gap: 6 }} title="Текстуры из игры или упрощённая схема карты (легче для слабых устройств)">
+            <input type="checkbox" checked={texOn} onChange={(e) => setTexOn(e.target.checked)} disabled={texState === 'error'} />
+            {texState === 'error' ? 'текстуры не загрузились' : 'текстуры'}
+          </label>
+        )}
       </div>
     </div>
   );

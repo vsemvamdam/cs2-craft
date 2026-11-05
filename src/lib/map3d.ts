@@ -135,3 +135,60 @@ export function pathAt(p: Path, s: number, out = new THREE.Vector3()) {
 export function landPoint(th: Throw) {
   return toThree(th.land[0], th.land[1], th.land[2]);
 }
+
+// ---- textured maps (real CS2 geometry + textures from the game files, tools/maps3d/build_textured.mjs) ----
+/** maps that have a textured .glb next to the collision mesh */
+export const TEXTURED_MAPS = new Set(['de_mirage']);
+const texCache = new Map<string, Promise<THREE.Group>>();
+
+/** loads public/maps3d/<map>.glb (meshopt-compressed, already in three/Source units); shared between replays */
+export function loadTexturedMap(map: string, onProgress?: (share: number) => void): Promise<THREE.Group> {
+  let p = texCache.get(map);
+  if (!p) {
+    p = (async () => {
+      const [{ GLTFLoader }, { MeshoptDecoder }] = await Promise.all([
+        import('three/examples/jsm/loaders/GLTFLoader.js'),
+        import('three/examples/jsm/libs/meshopt_decoder.module.js'),
+      ]);
+      const loader = new GLTFLoader();
+      loader.setMeshoptDecoder(MeshoptDecoder);
+      const gltf = await loader.loadAsync(BASE + map + '.glb', (e) => { if (e.total) onProgress?.(e.loaded / e.total); });
+      const group = gltf.scene;
+      group.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const src = mesh.material as THREE.MeshStandardMaterial;
+        const name = (src.name || '').toLowerCase();
+        const cutout = src.alphaTest > 0;
+        const decal = src.transparent || /decal|overlay|stain|trans|spray|graffiti/.test(name);
+        // Lambert: no specular — CS2 maps are mostly matte, and it is much cheaper than PBR
+        const mat = new THREE.MeshLambertMaterial({
+          name: src.name,
+          map: src.map,
+          color: src.color,
+          vertexColors: !!mesh.geometry.getAttribute('color'),
+          transparent: src.transparent,
+          alphaTest: src.alphaTest,
+          side: cutout ? THREE.DoubleSide : THREE.FrontSide,
+          depthWrite: !src.transparent,
+          polygonOffset: decal,
+          polygonOffsetFactor: decal ? -2 : 0,
+          polygonOffsetUnits: decal ? -2 : 0,
+          emissiveMap: src.emissiveMap,
+          emissive: src.emissiveMap ? new THREE.Color(0xffffff) : new THREE.Color(0x000000),
+        });
+        if (mat.map) { mat.map.anisotropy = 8; mat.map.colorSpace = THREE.SRGBColorSpace; }
+        src.dispose();
+        mesh.material = mat;
+        mesh.renderOrder = decal ? 1 : 0;
+        mesh.matrixAutoUpdate = false;
+        mesh.updateMatrix();
+      });
+      group.userData.keep = true; // owned by the cache, not by one replay
+      return group;
+    })();
+    p.catch(() => texCache.delete(map));
+    texCache.set(map, p);
+  }
+  return p;
+}
