@@ -350,8 +350,11 @@ def parse_store(store: str | Path):
     df["date"] = [w.date() for w in df["when"]]
     df["ts"] = [w.replace(tzinfo=dt.timezone.utc).timestamp() for w in df["when"]]
     df["date_approx"] = df["date_approx"].fillna(False).astype(bool) if "date_approx" in df else False
-    pair = [tuple(sorted((a, b))) for a, b in zip(df["t1"], df["t2"])]
-    df["key"] = [f"{p[0]}|{p[1]}|{d}|{sorted(ms)}" for p, d, ms in zip(pair, df["date"], df["maps"])]
+    # same match on two pages (possibly with the opponents in the other order): same teams, day and map scores
+    def mkey(a, b, d, ms):
+        sw = a > b
+        return f"{min(a, b)}|{max(a, b)}|{d}|{sorted((m[1], m[0]) if sw else (m[0], m[1]) for m in ms)}"
+    df["key"] = [mkey(a, b, d, ms) for a, b, d, ms in zip(df["t1"], df["t2"], df["date"], df["maps"])]
     before = len(df)
     df = df.sort_values(["date_approx", "ts"]).drop_duplicates("key").sort_values("ts").reset_index(drop=True)
     stats["duplicates"] = before - len(df)

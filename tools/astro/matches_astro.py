@@ -285,12 +285,12 @@ def power_check(days_df, astro_df, matches, start, end, log, n_sim=200, n_null=1
         q = bh([r["p"] for r in res])
         reps.append({"tests": len(res), "raw_p05": int(sum(r["p"] < 0.05 for r in res)), "fdr_q10": int(sum(x < 0.1 for x in q)),
                      "replicated": int(sum(r["replicates"] for r in res)), "both": int(sum(x < 0.1 and r["replicates"] for r, x in zip(res, q)))})
-    out["null_battery"] = {"runs": n_null, "tests_per_run": reps[0]["tests"] if reps else 0,
+    out["null_battery"] = {"n_runs": n_null, "tests_per_run": reps[0]["tests"] if reps else 0,
                            "mean_raw_p05": float(np.mean([r["raw_p05"] for r in reps])),
                            "runs_with_fdr_hit": int(sum(r["fdr_q10"] > 0 for r in reps)),
                            "runs_with_replicated_hit": int(sum(r["replicated"] > 0 for r in reps)),
-                           "runs_with_fdr_and_replicated": int(sum(r["both"] > 0 for r in reps)), "runs": reps}
-    log(f"синтетика без эффекта ({n_null} прогонов): " + json.dumps({k: v for k, v in out["null_battery"].items() if k != "runs"}))
+                           "runs_with_fdr_and_replicated": int(sum(r["both"] > 0 for r in reps)), "detail": reps}
+    log(f"синтетика без эффекта ({n_null} прогонов): " + json.dumps({k: v for k, v in out["null_battery"].items() if k != "detail"}))
     return out
 
 
