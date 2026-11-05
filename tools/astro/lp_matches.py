@@ -165,7 +165,7 @@ def opponent(raw: str):
     if "team" not in nl:
         return None
     tid = kw.get("template") or kw.get("team") or kw.get("1") or (pos[0] if pos else "")
-    tid = norm_team(tid)
+    tid = re.sub(r"\s+", " ", tid).strip().lower()  # team-template id; resolved to the team page via teams.json
     if not tid or tid in ("tbd", "tba", "bye", "&nbsp;", "definitions"):
         return None
     score = kw.get("score")
@@ -184,14 +184,21 @@ def map_result(raw: str):
         return None
     s1, s2 = kw.get("score1", ""), kw.get("score2", "")
     w = kw.get("winner", "")
+    ot = any(re.fullmatch(r"o\d+t[12](t|ct)", k) and re.fullmatch(r"\d+", v) for k, v in kw.items())
+    if not (re.fullmatch(r"\d+", s1) and re.fullmatch(r"\d+", s2)):
+        # CS wiki: half scores t1t/t1ct/t2t/t2ct plus overtime halves o<k>t1t/o<k>t1ct/…
+        half = {k: int(v) for k, v in kw.items() if re.fullmatch(r"(o\d+)?t[12](t|ct)", k) and re.fullmatch(r"\d+", v)}
+        if any(k in half for k in ("t1t", "t1ct")) and any(k in half for k in ("t2t", "t2ct")):
+            s1 = str(sum(v for k, v in half.items() if re.fullmatch(r"(o\d+)?t1(t|ct)", k)))
+            s2 = str(sum(v for k, v in half.items() if re.fullmatch(r"(o\d+)?t2(t|ct)", k)))
     if re.fullmatch(r"\d+", s1) and re.fullmatch(r"\d+", s2):
         r1, r2 = int(s1), int(s2)
         if r1 == r2 == 0:
             return None
         win = 1 if r1 > r2 else 2 if r2 > r1 else (int(w) if w in ("1", "2") else 0)
-        return (kw.get("map", "").strip(), r1, r2, win)
+        return (kw.get("map", "").strip(), r1, r2, win, ot)
     if w in ("1", "2") and fin in ("true", "1"):
-        return (kw.get("map", "").strip(), None, None, int(w))
+        return (kw.get("map", "").strip(), None, None, int(w), ot)
     return None
 
 
@@ -205,7 +212,8 @@ def parse_match(raw: str, ctx_date=None):
         r = map_result(kw[k])
         if r:
             maps.append(r)
-    bo = int(kw["bestof"]) if re.fullmatch(r"\d+", kw.get("bestof", "")) else None
+    slots = sum(1 for k in kw if re.fullmatch(r"map\d+", k))
+    bo = int(kw["bestof"]) if re.fullmatch(r"\d+", kw.get("bestof", "")) else (slots if slots in (1, 3, 5) else None)
     w1 = sum(1 for m in maps if m[3] == 1)
     w2 = sum(1 for m in maps if m[3] == 2)
     s1 = o1[1] if o1[1] is not None else w1
@@ -228,11 +236,11 @@ def parse_match(raw: str, ctx_date=None):
     if when is None and ctx_date is not None:
         when, has_time = ctx_date, False
     return {"t1": o1[0], "t2": o2[0], "winner": winner, "s1": s1, "s2": s2, "bo": bo,
-            "maps": [(m[1], m[2]) for m in maps if m[1] is not None], "mapnames": [m[0].lower() for m in maps],
+            "maps": [(m[1], m[2], m[4]) for m in maps if m[1] is not None], "mapnames": [m[0].lower() for m in maps],
             "walkover": bool(walkover and not maps), "when": when, "has_time": has_time}
 
 
-INFOBOX = re.compile(r"\{\{\s*Infobox[ _]league", re.I)
+INFOBOX = re.compile(r"\{\{\s*(Infobox[ _]league|HiddenDataBox)", re.I)
 
 
 def page_infobox(content: str):
@@ -260,6 +268,20 @@ def lan_of(kw):
     if "offline" in t or "lan" in t:
         return True
     return None
+
+
+def team_pages(store: Path) -> dict[str, str]:
+    """team-template id → team wiki page, from the expanded {{Team|id}} output (teams.json)"""
+    f = store / "teams.json"
+    if not f.exists():
+        return {}
+    out = {}
+    for tid, html in json.loads(f.read_text()).get("ids", {}).items():
+        m = (re.search(r"team-template-text[^>]*>\s*\[\[([^\]|#]+)", html) or re.search(r"\|link=([^\]|]+)\]\]", html)
+             or re.search(r"\[\[(?!File:|Image:|Category:)([^\]|#]+)", html))
+        if m and "error" not in html[:200].lower():
+            out[tid] = m.group(1).strip().replace("_", " ")
+    return out
 
 
 def parse_store(store: str | Path):
@@ -318,9 +340,16 @@ def parse_store(store: str | Path):
     df = pd.DataFrame(rows)
     if df.empty:
         return df, stats
+    tp = team_pages(store)
+    stats["team_ids"] = int(pd.concat([df["t1"], df["t2"]]).nunique())
+    df["t1"] = [tp.get(t, t) for t in df["t1"]]
+    df["t2"] = [tp.get(t, t) for t in df["t2"]]
+    df = df[df["t1"] != df["t2"]]
+    stats["team_pages_known"] = len(tp)
+    stats["teams"] = int(pd.concat([df["t1"], df["t2"]]).nunique())
     df["date"] = [w.date() for w in df["when"]]
     df["ts"] = [w.replace(tzinfo=dt.timezone.utc).timestamp() for w in df["when"]]
-    df["date_approx"] = df.get("date_approx", False).fillna(False).astype(bool)
+    df["date_approx"] = df["date_approx"].fillna(False).astype(bool) if "date_approx" in df else False
     pair = [tuple(sorted((a, b))) for a, b in zip(df["t1"], df["t2"])]
     df["key"] = [f"{p[0]}|{p[1]}|{d}|{sorted(ms)}" for p, d, ms in zip(pair, df["date"], df["maps"])]
     before = len(df)

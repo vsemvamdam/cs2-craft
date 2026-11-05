@@ -4,7 +4,8 @@ astro_table(start, end) — таблица астрофакторов на ка�
   retro_<Planet>, moon_new / moon_full / moon_waxing, moon_sign, sun_sign, ingress_<Planet>,
   asp_<A>_<B>_<angle> (точные мажорные аспекты, орбис 1.5°), hard_aspects, tense_day, eclipse.
 natal_longitudes(date) — долготы планет на дату рождения (полдень UTC, время рождения обычно неизвестно).
-shift_test(y, f) — разница средних «дни с фактором − остальные» и p-значение по циклическим сдвигам.
+shift_test(y, f[, w=веса]) — разница средних «дни с фактором − остальные» и p-значение по циклическим сдвигам
+  (с весами — взвешенные средние, например по числу матчей в день).
 bh(p) — поправка Бенджамини–Хохберга.
 Дни считаются от 2013-01-01, как во всех данных сайта.
 """
@@ -133,8 +134,12 @@ def adjust_weekday(s: pd.Series, dates) -> pd.Series:
     return s - s.groupby(wd).transform("mean")
 
 
-def shift_test(y: np.ndarray, f: np.ndarray, n_perm=2000, min_shift=30, rng=None):
-    """difference of means (f days − other days) with a circular-shift null distribution"""
+def shift_test(y: np.ndarray, f: np.ndarray, n_perm=2000, min_shift=30, rng=None, w: np.ndarray | None = None, min_days=15):
+    """difference of means (f days − other days) with a circular-shift null distribution.
+    w (optional): weights per day (e.g. number of matches) — then weighted means, i.e. the difference between
+    all events on f days and all events on other days; computed for every shift at once via FFT."""
+    if w is not None:
+        return _shift_test_w(y, f, w, n_perm, min_shift, rng, min_days)
     ok = ~np.isnan(y)
     y, f = y[ok], f[ok].astype(bool)
     n = len(y)
@@ -151,6 +156,30 @@ def shift_test(y: np.ndarray, f: np.ndarray, n_perm=2000, min_shift=30, rng=None
     p = (np.sum(np.abs(null) >= abs(obs)) + 1) / (n_perm + 1)
     # smallest effect this test would catch ~80% of the time at p < 0.05: (1.96 + 0.84) × spread of the null
     return {"diff": float(obs), "p": float(p), "days": int(k), "null_sd": float(null.std()), "mde": float(2.8 * null.std())}
+
+
+def _shift_test_w(y, f, w, n_perm, min_shift, rng, min_days):
+    ok = ~np.isnan(y) & (np.asarray(w) > 0)
+    y, f, w = np.asarray(y, float)[ok], np.asarray(f)[ok].astype(bool), np.asarray(w, float)[ok]
+    n = len(y)
+    k = int(f.sum())
+    if k < min_days or n - k < min_days or n < 2 * min_shift + 2:
+        return None
+    a = w * y
+    fa, fw, ff = np.fft.rfft(a), np.fft.rfft(w), np.fft.rfft(f.astype(float))
+    # c[s] = Σ_i a[i]·f[i−s] — the sums over "factor days" when the factor is rolled by s
+    s1 = np.fft.irfft(fa * np.conj(ff), n)
+    n1 = np.fft.irfft(fw * np.conj(ff), n)
+    tot_a, tot_w = a.sum(), w.sum()
+    with np.errstate(divide="ignore", invalid="ignore"):
+        diff_all = s1 / n1 - (tot_a - s1) / (tot_w - n1)
+    obs = float(a[f].sum() / w[f].sum() - a[~f].sum() / w[~f].sum())
+    rng = rng or np.random.default_rng(1)
+    shifts = rng.integers(min_shift, n - min_shift, n_perm)
+    null = diff_all[shifts]
+    null = null[np.isfinite(null)]
+    p = (np.sum(np.abs(null) >= abs(obs)) + 1) / (len(null) + 1)
+    return {"diff": obs, "p": float(p), "days": k, "events": float(w[f].sum()), "null_sd": float(null.std()), "mde": float(2.8 * null.std())}
 
 
 def bh(pvals: list[float]) -> list[float]:

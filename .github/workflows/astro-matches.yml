@@ -3,7 +3,8 @@ name: Астро-проверка матчей
 # Длинная история про-матчей CS (S- и A-тир, Liquipedia, CC BY-SA 3.0) и даты рождения игроков →
 # хранилище matches-hist (релиз data-store) → статистическая проверка астрологии (tools/astro/matches_astro.py)
 # → результаты и графики в архиве astro-matches. Загрузка возобновляемая: уже скачанные завершённые
-# турниры и найденные игроки повторно не запрашиваются. Один job, только action=query (≥2 с между запросами).
+# турниры и найденные игроки повторно не запрашиваются. Один job; action=query (≥2 с между запросами) и несколько
+# expandtemplates для названий команд (≥31 с между ними, как для parse).
 on:
   workflow_dispatch:
   push:
@@ -41,6 +42,8 @@ jobs:
         run: scripts/store.sh pull matches-hist
       - name: Турниры и матчи (Liquipedia)
         run: node scripts/fetch-matches-hist.mjs tournaments --store store/matches-hist --from 2021-01-01 --limit "$HIST_LIMIT"
+      - name: Команды (шаблон → страница команды)
+        run: node scripts/fetch-matches-hist.mjs teams --store store/matches-hist
       - name: Игроки из демок
         run: scripts/store.sh pull nades-site
       - name: Даты рождения игроков (Liquipedia)

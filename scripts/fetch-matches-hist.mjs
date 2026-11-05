@@ -4,15 +4,18 @@
 //
 //   node scripts/fetch-matches-hist.mjs tournaments [--store store/matches-hist] [--from 2021-05-01] [--limit N]
 //   node scripts/fetch-matches-hist.mjs players --players store/nades-site/players [--store store/matches-hist]
+//   node scripts/fetch-matches-hist.mjs teams [--store store/matches-hist]   (team-template id → team page)
 //
 // Liquipedia MediaWiki API (CC BY-SA 3.0), https://liquipedia.net/api-terms-of-use : the shared client
 // (scripts/lib/esports/liquipedia.mjs) sends a User-Agent with the repository as contact, gzip, ≥2 s between
-// requests; only action=query is used here (no parse), up to 50 pages per request. Resumable: a tournament is
+// requests; action=query for pages (up to 50 per request) and a few expandtemplates calls for team names, kept
+// ≥ 31 s apart like action=parse (no parse calls). Resumable: a tournament is
 // fetched again only if it was not over yet when it was fetched; players only when not looked up yet.
 // Store layout (data-store release asset matches-hist, scripts/store.sh):
 //   tournaments.json  { at, cats: {cat: n}, list: {page: {t: infobox fields, lead_at}} }
 //   raw/<slug>.json    { page, at, titles: { title: { rev, ts, content } } }  — the page and all its subpages
 //   players.json      { at, q: { requested name: { title?, missing?, content? } }, extra: { title: content } }
+//   teams.json        { at, ids: { template id: expanded {{Team|id}} wikitext } }
 // Env: HIST_BUDGET_MIN (default 300) — stop fetching after that many minutes (store stays consistent).
 
 import fs from 'node:fs/promises';
@@ -292,9 +295,52 @@ async function players() {
   log(`игроков: найдено страниц ${found} из ${Object.keys(state.q).length}; запросов ${lp.count}`);
 }
 
+// ───────────────────────── teams ─────────────────────────
+// Match2 opponents are team-template ids ("vit", "vitality", "the mongolz 2025" …). One expandtemplates call per
+// 300 ids renders {{Team|id}}, whose output links the team's wiki page — the analysis uses that page as identity.
+// Treated like action=parse: ≥ 31 s between such calls.
+async function teams() {
+  const statePath = path.join(STORE, 'teams.json');
+  const state = await readJSON(statePath, { ids: {} });
+  state.ids ||= {};
+  const ids = new Set();
+  const rawDir = path.join(STORE, 'raw');
+  for (const f of await fs.readdir(rawDir)) {
+    const j = await readJSON(path.join(rawDir, f), {});
+    for (const t of Object.values(j.titles || {})) {
+      for (const m of String(t.content).matchAll(/\{\{\s*TeamOpponent\s*\|\s*(?:template\s*=\s*)?([^|}]+)/gi)) {
+        const id = m[1].trim().toLowerCase();
+        if (id && !/^(tbd|tba|bye)$/.test(id) && !/[{}[\]<>|]/.test(id)) ids.add(id);
+      }
+    }
+  }
+  const todo = [...ids].filter((id) => !(id in state.ids));
+  log(`шаблонов команд: ${ids.size}, новых: ${todo.length}`);
+  let lastExpand = 0;
+  for (let i = 0; i < todo.length && !overBudget(); i += 300) {
+    const chunk = todo.slice(i, i + 300);
+    const text = chunk.map((id, k) => `<div data-k="${k}">{{Team|${id}}}</div>`).join('\n');
+    const wait = lastExpand + 31000 - Date.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    lastExpand = Date.now();
+    try {
+      const j = await lp.call({ action: 'expandtemplates', prop: 'wikitext', title: 'Liquipedia:Matches', text }, `teams-${i / 300}`);
+      const out = j.expandtemplates?.wikitext ?? j.expandtemplates?.['*'] ?? '';
+      for (const m of out.matchAll(/<div data-k="(\d+)">([\s\S]*?)<\/div>(?=\n<div data-k=|$)/g)) state.ids[chunk[+m[1]]] = m[2].slice(0, 1500);
+      log(`команды ${i}…${i + chunk.length}: ${out.length} симв.; пример: ${JSON.stringify(out.slice(0, 400))}`);
+    } catch (e) {
+      log('команды:', e.message);
+    }
+  }
+  state.at = new Date().toISOString();
+  await writeJSON(statePath, state);
+  log(`команд с выводом шаблона: ${Object.keys(state.ids).length}`);
+}
+
 if (cmd === 'tournaments') await tournaments();
+else if (cmd === 'teams') await teams();
 else if (cmd === 'players') await players();
 else {
-  console.error('usage: fetch-matches-hist.mjs tournaments|players');
+  console.error('usage: fetch-matches-hist.mjs tournaments|players|teams');
   process.exit(2);
 }
