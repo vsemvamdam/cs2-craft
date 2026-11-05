@@ -25,13 +25,13 @@ export default function Stats({ id }: { id?: string }) {
 function NotConfigured() {
   return (
     <div className="stack" style={{ gap: 16 }}>
-      <SearchHero />
-      <div className="notice">Раздел статистики подключается: как только заработает сервер профилей, здесь можно будет открыть любой профиль Steam — уровень, XP, игры и часы, статистику CS2, инвентарь — и рейтинг профилей.</div>
+      <SearchHero disabled />
+      <div className="notice">Поиск профилей пока не работает: сервер статистики ещё не запущен. Когда он заработает, здесь можно будет открыть любой профиль Steam — уровень, XP, игры и часы, статистику CS2, инвентарь — и рейтинг профилей.</div>
     </div>
   );
 }
 
-function SearchHero({ compact }: { compact?: boolean }) {
+function SearchHero({ compact, disabled }: { compact?: boolean; disabled?: boolean }) {
   const [q, setQ] = useState('');
   const go = (e: React.FormEvent) => { e.preventDefault(); if (q.trim()) navigate(profilePath(q)); };
   return (
@@ -43,8 +43,8 @@ function SearchHero({ compact }: { compact?: boolean }) {
         </div>
       )}
       <form className="st-search" onSubmit={go}>
-        <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ссылка на профиль Steam, SteamID64 или ник из ссылки (steamcommunity.com/id/…)" aria-label="Профиль Steam" />
-        <button className="btn primary" type="submit">Найти</button>
+        <input className="input" value={q} onChange={(e) => setQ(e.target.value)} disabled={disabled} placeholder={disabled ? 'Поиск появится после запуска сервера статистики' : 'Ссылка на профиль Steam, SteamID64 или ник из ссылки (steamcommunity.com/id/…)'} aria-label="Профиль Steam" />
+        <button className="btn primary" type="submit" disabled={disabled}>Найти</button>
       </form>
     </div>
   );

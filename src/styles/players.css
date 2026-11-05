@@ -11,3 +11,9 @@
 .pl-stat b{font-size:22px}
 @media (max-width:900px){.grid[style*="1.4fr"]{grid-template-columns:1fr !important}
 }
+
+/* official pages / channels */
+.pl-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: -4px; }
+.pl-link { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px; font-weight: 600; text-decoration: none; }
+.pl-link:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); background: var(--surface-2); }
+.pl-link i { width: 9px; height: 9px; border-radius: 50%; flex: none; }

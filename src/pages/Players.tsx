@@ -37,6 +37,85 @@ type Game = [string, string, string, string, string, string, number, number, num
 type Profile = { sid: string; name: string; names: string[]; team: string; teams: [string, number][]; xhair: string; xhairs: [string, string][]; maps: Record<string, number>; games: Game[] };
 
 const BASE = import.meta.env.BASE_URL + 'data/players/';
+
+// ---- official pages / channels (Liquipedia infobox, FACEIT API) — built by scripts/build-player-links.mjs ----
+type PlayerInfo = { lp?: string; id?: string; name?: string; rn?: string; c?: string; b?: string; r?: string; st?: string; l: Record<string, string>; fl?: number; fe?: number };
+let linksP: Promise<Record<string, PlayerInfo>> | null = null;
+function useLinks() {
+  const [v, setV] = useState<Record<string, PlayerInfo> | null>(null);
+  useEffect(() => {
+    linksP ||= fetch(BASE + 'links.json').then((r) => (r.ok ? r.json() : { p: {} })).then((j) => j.p || {}).catch(() => ({}));
+    let live = true;
+    linksP.then((x) => live && setV(x));
+    return () => { live = false; };
+  }, []);
+  return v;
+}
+const LINK_META: Record<string, { ru: string; url: (v: string) => string; color: string }> = {
+  faceit: { ru: 'FACEIT', url: (v) => `https://www.faceit.com/ru/players/${v}`, color: '#ff5500' },
+  twitter: { ru: 'X (Twitter)', url: (v) => `https://x.com/${v.replace(/^@/, '')}`, color: '#8b98a5' },
+  instagram: { ru: 'Instagram', url: (v) => `https://www.instagram.com/${v.replace(/^@/, '')}`, color: '#e1306c' },
+  twitch: { ru: 'Twitch', url: (v) => `https://www.twitch.tv/${v}`, color: '#9146ff' },
+  youtube: { ru: 'YouTube', url: (v) => `https://www.youtube.com/${v.replace(/^\/+/, '')}`, color: '#ff3d3d' },
+  telegram: { ru: 'Telegram', url: (v) => `https://t.me/${v.replace(/^@/, '')}`, color: '#2aabee' },
+  vk: { ru: 'ВКонтакте', url: (v) => `https://vk.com/${v}`, color: '#4c75a3' },
+  tiktok: { ru: 'TikTok', url: (v) => `https://www.tiktok.com/@${v.replace(/^@/, '')}`, color: '#25f4ee' },
+  kick: { ru: 'Kick', url: (v) => `https://kick.com/${v}`, color: '#53fc18' },
+  facebook: { ru: 'Facebook', url: (v) => `https://www.facebook.com/${v}`, color: '#1877f2' },
+  bilibili: { ru: 'Bilibili', url: (v) => `https://space.bilibili.com/${v}`, color: '#00a1d6' },
+  weibo: { ru: 'Weibo', url: (v) => `https://weibo.com/${v}`, color: '#e6162d' },
+  douyin: { ru: 'Douyin', url: (v) => `https://www.douyin.com/user/${v}`, color: '#fe2c55' },
+  reddit: { ru: 'Reddit', url: (v) => `https://www.reddit.com/user/${v}`, color: '#ff4500' },
+  esea: { ru: 'ESEA', url: (v) => `https://play.esea.net/users/${v}`, color: '#2ecc71' },
+  gamersclub: { ru: 'Gamers Club', url: (v) => `https://gamersclub.com.br/player/${v}`, color: '#00c7ff' },
+  '5ewin': { ru: '5E Arena', url: (v) => `https://arena.5eplay.com/data/player/${v}`, color: '#f5c518' },
+};
+const linkUrl = (k: string, v: string) => (/^https?:\/\//.test(v) ? v : LINK_META[k]?.url(v) || '');
+const COUNTRY: Record<string, string> = {
+  Albania: 'AL', Argentina: 'AR', Australia: 'AU', Azerbaijan: 'AZ', Belarus: 'BY', Belgium: 'BE', 'Bosnia and Herzegovina': 'BA', Brazil: 'BR',
+  Bulgaria: 'BG', Canada: 'CA', Chile: 'CL', China: 'CN', Croatia: 'HR', 'Czech Republic': 'CZ', Czechia: 'CZ', Denmark: 'DK', Estonia: 'EE',
+  Finland: 'FI', France: 'FR', Georgia: 'GE', Germany: 'DE', Guatemala: 'GT', 'Hong Kong': 'HK', Hungary: 'HU', Iceland: 'IS', India: 'IN',
+  Indonesia: 'ID', Ireland: 'IE', Israel: 'IL', Italy: 'IT', Jordan: 'JO', Kazakhstan: 'KZ', Kosovo: 'XK', Latvia: 'LV', Lebanon: 'LB',
+  Lithuania: 'LT', Luxembourg: 'LU', Malaysia: 'MY', Mexico: 'MX', Mongolia: 'MN', Montenegro: 'ME', 'New Zealand': 'NZ', 'North Macedonia': 'MK',
+  Norway: 'NO', Pakistan: 'PK', Peru: 'PE', Philippines: 'PH', Poland: 'PL', Portugal: 'PT', Romania: 'RO', Russia: 'RU', Serbia: 'RS',
+  Singapore: 'SG', Slovakia: 'SK', Slovenia: 'SI', 'South Africa': 'ZA', Spain: 'ES', Sweden: 'SE', Switzerland: 'CH', Taiwan: 'TW',
+  Tajikistan: 'TJ', Thailand: 'TH', Turkey: 'TR', Ukraine: 'UA', 'United Arab Emirates': 'AE', 'United Kingdom': 'GB', 'United States': 'US',
+  Uruguay: 'UY', Uzbekistan: 'UZ', Venezuela: 'VE', Vietnam: 'VN', Netherlands: 'NL', Austria: 'AT', Greece: 'GR', Japan: 'JP', 'South Korea': 'KR',
+  Kyrgyzstan: 'KG', Armenia: 'AM', Moldova: 'MD', Colombia: 'CO', Ecuador: 'EC', Paraguay: 'PY', Bolivia: 'BO', Egypt: 'EG', Morocco: 'MA',
+};
+let regionNames: Intl.DisplayNames | null = null;
+function countryRu(c: string) {
+  const code = COUNTRY[c];
+  if (!code || code === 'XK') return c === 'Kosovo' ? 'Косово' : c;
+  try { regionNames ||= new Intl.DisplayNames(['ru'], { type: 'region' }); return regionNames.of(code) || c; } catch { return c; }
+}
+const ROLE_RU: Record<string, string> = { igl: 'капитан (IGL)', awp: 'снайпер (AWP)', entry: 'энтри', lurk: 'люркер', support: 'саппорт', rifle: 'райфлер', coach: 'тренер' };
+function age(b: string) {
+  const d = new Date(b + 'T00:00:00Z'), n = new Date();
+  let a = n.getUTCFullYear() - d.getUTCFullYear();
+  if (n.getUTCMonth() < d.getUTCMonth() || (n.getUTCMonth() === d.getUTCMonth() && n.getUTCDate() < d.getUTCDate())) a--;
+  return a;
+}
+const yearsRu = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? 'год' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'года' : 'лет');
+
+function PlayerLinks({ sid, info }: { sid: string; info: PlayerInfo | undefined }) {
+  const keys = Object.keys(LINK_META).filter((k) => info?.l?.[k]);
+  return (
+    <div className="pl-links">
+      {keys.map((k) => {
+        const m = LINK_META[k];
+        const extra = k === 'faceit' && info?.fl ? ` · ${info.fl} ур.${info.fe ? ` · ${info.fe} ELO` : ''}` : '';
+        return (
+          <a key={k} className="pl-link" href={linkUrl(k, info!.l[k])} target="_blank" rel="noreferrer" title={`${m.ru}: ${info!.l[k]}`}>
+            <i style={{ background: m.color }} />{m.ru}{extra}
+          </a>
+        );
+      })}
+      <a className="pl-link" href={`https://steamcommunity.com/profiles/${sid}`} target="_blank" rel="noreferrer"><i style={{ background: '#66c0f4' }} />Steam</a>
+      {info?.lp && <a className="pl-link" href={`https://liquipedia.net/counterstrike/${encodeURIComponent(info.lp.replace(/ /g, '_'))}`} target="_blank" rel="noreferrer"><i style={{ background: '#3d8ee6' }} />Liquipedia</a>}
+    </div>
+  );
+}
 const MAP_RU: Record<string, string> = { mirage: 'Mirage', inferno: 'Inferno', nuke: 'Nuke', ancient: 'Ancient', anubis: 'Anubis', dust2: 'Dust II', cache: 'Cache', overpass: 'Overpass', train: 'Train', vertigo: 'Vertigo' };
 const f1 = (x: number) => x.toFixed(1);
 const f2 = (x: number) => x.toFixed(2);
@@ -206,6 +285,8 @@ function PlayerPage({ sid }: { sid: string }) {
   const [allGames, setAllGames] = useState(false);
   const avatars = useAvatars();
   const logo = useTeamLogos();
+  const links = useLinks();
+  const info = links?.[sid];
   if (p.loading || ix.loading) return <Spinner />;
   const d = p.data;
   if (!d || !row) return <div className="notice">Игрок не найден. <a className="link" href="#/players">Все игроки</a></div>;
@@ -230,10 +311,20 @@ function PlayerPage({ sid }: { sid: string }) {
             <h1>{d.name}</h1>
           </div>
           <div className="muted row" style={{ gap: 8 }}>{d.team ? <TeamLogo team={d.team} size={22} logo={logo} /> : null}{d.team || 'Без команды'}{d.teams.length > 1 ? <span className="small"> · ранее: {d.teams.filter(([t]) => t !== d.team).map(([t]) => t).join(', ')}</span> : null}</div>
+          {(info?.name || info?.c || info?.b || info?.r) && (
+            <div className="small muted row" style={{ gap: 6 }}>
+              {[
+                info.rn ? `${info.rn}${info.name && info.name !== info.rn ? ` (${info.name})` : ''}` : info.name,
+                info.c ? countryRu(info.c) : '',
+                info.b ? `${age(info.b)} ${yearsRu(age(info.b))}` : '',
+                info.r ? info.r.split(',').map((x) => ROLE_RU[x] || x).join(', ') : '',
+              ].filter(Boolean).join(' · ')}
+            </div>
+          )}
           {d.names.length > 1 && <div className="tiny faint">другие ники в демках: {d.names.slice(1).join(', ')}</div>}
         </div>
-        <a className="btn small ghost" href={`https://steamcommunity.com/profiles/${d.sid}`} target="_blank" rel="noreferrer">Профиль Steam ↗</a>
       </div>
+      <PlayerLinks sid={d.sid} info={info} />
       <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1.4fr) minmax(280px, 1fr)', alignItems: 'start' }}>
         <div className="stack" style={{ gap: 16 }}>
           <div className="card pad">
@@ -299,7 +390,7 @@ function PlayerPage({ sid }: { sid: string }) {
           </div>
         </div>
       </div>
-      <p className="tiny muted">Статистика посчитана по турнирным демкам из открытого архива (OpenCS2, CC BY 4.0) — это не полная карьерная статистика, а только матчи, попавшие в базу.</p>
+      <p className="tiny muted">{info?.lp ? <>Имя, страна, роль и ссылки на соцсети — <a className="link" href="https://liquipedia.net/counterstrike/" target="_blank" rel="noreferrer">Liquipedia</a> (CC BY-SA 3.0){info.fl ? ', уровень FACEIT — FACEIT API' : ''}. </> : null}Статистика посчитана по турнирным демкам из открытого архива (OpenCS2, CC BY 4.0) — это не полная карьерная статистика, а только матчи, попавшие в базу.</p>
     </div>
   );
 }

@@ -56,6 +56,16 @@ jobs:
         run: |
           scripts/store.sh pull nades-site
           if [ -d store/nades-site ]; then cp -r store/nades-site/. public/data/; fi
+      - name: Профили игроков — соцсети, FACEIT (Liquipedia + FACEIT API)
+        env:
+          FACEIT_API_KEY: ${{ secrets.FACEIT_API_KEY }}
+        run: |
+          scripts/store.sh pull matches-hist
+          scripts/store.sh pull faceit
+          if [ -n "$FACEIT_API_KEY" ]; then
+            node scripts/fetch-faceit.mjs && scripts/store.sh push faceit || echo "::warning::FACEIT не обновился"
+          fi
+          node scripts/build-player-links.mjs || echo "::warning::профили игроков не собраны"
       - name: Аватары игроков (Steam)
         env:
           STEAM_API_KEY: ${{ secrets.STEAM_API_KEY }}
