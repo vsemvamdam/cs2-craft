@@ -16,6 +16,7 @@
 
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import { execSync } from 'node:child_process';
 import { DATA, STORE, readJSON, writeJSON, sleep, dayOf, today, timeBudget, buildNameIndex } from './lib/common.mjs';
 
 const H = path.join(STORE, 'history');
@@ -127,8 +128,19 @@ async function main() {
     }
     dirty.clear();
     meta.lastRun = new Date().toISOString();
+    meta.lastStats = { ok, empty, errors, statuses, delay: Math.round(delay), at: meta.lastRun };
     await writeJSON(path.join(H, '_meta.json'), meta);
+    // in CI: publish progress every ~40 minutes so charts fill in while the long run continues
+    if (process.env.GITHUB_ACTIONS && process.env.GH_TOKEN && Date.now() - lastUpload > 40 * 60000) {
+      lastUpload = Date.now();
+      try {
+        execSync('bash scripts/store.sh push history', { stdio: 'inherit' });
+        execSync('gh workflow run site.yml -f quick=true', { stdio: 'inherit' });
+      } catch (e) { console.warn('progress upload failed:', e.message); }
+    }
   }
+  let lastUpload = Date.now();
+  const statuses = {};
 
   for (const q of queue) {
     if (budget.over()) break;
@@ -137,6 +149,7 @@ async function main() {
     try {
       r = await fetch(url, { headers: { Cookie: cookie, 'User-Agent': 'Mozilla/5.0 cs2-craft history bot', Accept: 'application/json' }, signal: AbortSignal.timeout(45000) });
     } catch (e) { errors++; await sleep(15000); continue; }
+    statuses[r.status] = (statuses[r.status] || 0) + 1;
     if (r.status === 429) {
       consecutive429++;
       delay = Math.min(delay * 1.4, 15000);
