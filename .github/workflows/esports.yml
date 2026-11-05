@@ -1,0 +1,68 @@
+name: Матчи и коэффициенты
+
+# Расписание и результаты про-матчей CS2 (Liquipedia), цены Polymarket и — если задан секрет
+# ODDS_API_KEY — коэффициенты букмекеров (OddsPapi). Результат — один JSON, который force-push'ем
+# единственным коммитом сиротской ветки esports-data: история git не растёт, а сайт читает файл
+# по адресу raw.githubusercontent.com/<репозиторий>/esports-data/esports.json без пересборки Pages.
+on:
+  schedule:
+    - cron: '4,24,44 * * * *'   # каждые 20 минут (Liquipedia: 1 parse-запрос за запуск)
+  push:
+    branches: [main, esports]
+    paths:
+      - 'scripts/fetch-esports.mjs'
+      - 'scripts/lib/esports/**'
+      - 'scripts/lib/mini-html.mjs'
+      - '.github/workflows/esports.yml'
+  workflow_dispatch:
+    inputs:
+      odds:
+        description: 'Обновить коэффициенты OddsPapi прямо сейчас (тратит 2 запроса из месячного лимита)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: esports
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Предыдущие данные (ветка esports-data)
+        run: |
+          mkdir -p esports-prev
+          if git fetch -q --depth=1 origin esports-data 2>/dev/null; then
+            git show FETCH_HEAD:esports.json > esports-prev/esports.json || true
+            git show FETCH_HEAD:cache.json > esports-prev/cache.json || true
+          else
+            echo "ветки esports-data ещё нет — начинаю с нуля"
+          fi
+      - name: Матчи, турниры, коэффициенты
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          ODDS_BOOKMAKERS: ${{ vars.ODDS_BOOKMAKERS }}
+          ODDS_REFRESH_MIN: ${{ vars.ODDS_REFRESH_MIN }}
+          ODDS_MONTHLY_LIMIT: ${{ vars.ODDS_MONTHLY_LIMIT }}
+          FORCE_ODDS: ${{ inputs.odds }}
+        run: node scripts/fetch-esports.mjs --prev esports-prev --out esports-out
+      - name: Опубликовать в ветку esports-data
+        run: |
+          node -e "const d=require('./esports-out/esports.json'); if(d.v!==1||!Array.isArray(d.matches)) process.exit(1)"
+          cd esports-out
+          git init -q -b esports-data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config http.https://github.com/.extraheader "$(git -C .. config http.https://github.com/.extraheader)"
+          git add esports.json cache.json
+          git commit -q -m "Данные матчей $(date -u '+%Y-%m-%d %H:%M UTC')"
+          git push -q -f "https://github.com/${{ github.repository }}.git" esports-data
+          echo "опубликовано: $(du -h esports.json | cut -f1)"

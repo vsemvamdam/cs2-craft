@@ -17,6 +17,7 @@ const NAV = [
 ];
 /** less used sections: under «Ещё» on desktop, listed flat in the mobile menu */
 const MORE = [
+  { to: '/esports', label: 'Матчи' },
   { to: '/patterns', label: 'Паттерны' },
   { to: '/tools', label: 'Утилиты' },
   { to: '/collections', label: 'Коллекции' },
