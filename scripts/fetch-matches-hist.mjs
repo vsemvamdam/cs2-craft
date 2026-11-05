@@ -200,7 +200,7 @@ async function players() {
   for (const f of await fs.readdir(dir)) {
     if (!/^\d+\.json$/.test(f)) continue;
     const j = await readJSON(path.join(dir, f), {});
-    for (const n of j.names || []) if (n) names.add(String(n).trim());
+    for (const n of j.names || []) if (n && String(n).trim()) names.add(String(n).trim());
   }
   const todo = [...names].filter((n) => !BAD_TITLE.test(n) && !(n in state.q));
   log(`имён игроков: ${names.size}, новых для поиска: ${todo.length}`);
@@ -226,7 +226,38 @@ async function players() {
       log('игроки:', e.message);
     }
   }
-  // disambiguation pages → fetch the linked player pages too (the analysis picks the one with the right team)
+  // spelling variants of names that were not found (wiki titles are case-sensitive after the first letter):
+  // "MATYS" → "Matys", "matys"; "vinhy-" → "vinhy". The analysis accepts a page only if its steam64ID matches.
+  const variants = new Set();
+  for (const n of names) {
+    if (BAD_TITLE.test(n) || !state.q[n]?.missing) continue;
+    const core = n.replace(/^[-_.]+|[-_.]+$/g, '');
+    for (const v of [n.toLowerCase(), n[0].toUpperCase() + n.slice(1).toLowerCase(), core, core.toLowerCase()]) {
+      if (v && v !== n && !BAD_TITLE.test(v) && !(v in state.q)) variants.add(v);
+    }
+  }
+  const vlist = [...variants];
+  log(`вариантов написания для ненайденных: ${vlist.length}`);
+  for (let i = 0; i < vlist.length && !overBudget(); i += 50) {
+    const chunk = vlist.slice(i, i + 50);
+    try {
+      const j = await lp.call({ action: 'query', prop: 'revisions', rvprop: 'content', rvslots: 'main', rvsection: '0', redirects: '1', titles: chunk.join('|') }, `plv-${i / 50}`);
+      const q = j.query || {};
+      const step = new Map([...(q.normalized || []), ...(q.redirects || [])].map((x) => [x.from, x.to]));
+      const byTitle = new Map((q.pages || []).map((p) => [p.title, p]));
+      for (const n of chunk) {
+        let t = n;
+        for (let k = 0; k < 4 && step.has(t); k++) t = step.get(t);
+        const p = byTitle.get(t);
+        if (!p || p.missing || p.invalid) { state.q[n] = { missing: true, variant: true }; continue; }
+        state.q[n] = { title: p.title, variant: true };
+        state.extra[p.title] = contentOf(p) || '';
+      }
+    } catch (e) {
+      log('варианты:', e.message);
+    }
+  }
+  // disambiguation pages → fetch the linked player pages too (the analysis picks the one with the right steam64ID)
   const dis = new Set();
   for (const [t, c] of Object.entries(state.extra)) {
     if (!/\{\{\s*(disambig|disambiguation|dab)/i.test(c) && !/may refer to/i.test(c)) continue;

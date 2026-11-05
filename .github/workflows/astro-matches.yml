@@ -27,7 +27,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       HIST_BUDGET_MIN: '280'
-      HIST_LIMIT: '6'
+      HIST_LIMIT: '100000'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -40,7 +40,7 @@ jobs:
       - name: Хранилище истории матчей
         run: scripts/store.sh pull matches-hist
       - name: Турниры и матчи (Liquipedia)
-        run: node scripts/fetch-matches-hist.mjs tournaments --store store/matches-hist --from 2021-05-01 --limit "$HIST_LIMIT"
+        run: node scripts/fetch-matches-hist.mjs tournaments --store store/matches-hist --from 2021-01-01 --limit "$HIST_LIMIT"
       - name: Игроки из демок
         run: scripts/store.sh pull nades-site
       - name: Даты рождения игроков (Liquipedia)
