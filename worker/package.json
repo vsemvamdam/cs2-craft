@@ -1,0 +1,13 @@
+{
+  "name": "cs2-craft-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "check": "wrangler deploy --dry-run --outdir dist"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261016.1",
+    "wrangler": "4.151.1"
+  }
+}

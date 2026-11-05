@@ -1,0 +1,17 @@
+# Cloudflare Worker: live Steam profile lookups + ladder for the «Статистика» section of the site.
+# Deployed by .github/workflows/worker.yml (database_id is filled in there; the Steam key is a Worker secret).
+name = "cs2-craft-api"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cs2-craft-stats"
+database_id = "__D1_ID__"
+
+[triggers]
+crons = ["*/10 * * * *"]
+
+[observability]
+enabled = true

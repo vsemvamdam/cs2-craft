@@ -9,11 +9,19 @@ const NAV = [
   { to: '/skins', label: 'Скины' },
   { to: '/tradeup', label: 'Крафты' },
   { to: '/craft', label: 'Стикер-крафт' },
-  { to: '/patterns', label: 'Паттерны' },
   { to: '/nades', label: 'Раскидки' },
+  { to: '/callouts', label: 'Коллауты' },
+  { to: '/players', label: 'Игроки' },
+  { to: '/stats', label: 'Статистика' },
   { to: '/esports', label: 'Матчи' },
+  { to: '/crosshair', label: 'Прицел' },
+];
+/** less used sections: under «Ещё» on desktop, listed flat in the mobile menu */
+const MORE = [
+  { to: '/patterns', label: 'Паттерны' },
   { to: '/tools', label: 'Утилиты' },
   { to: '/collections', label: 'Коллекции' },
+  { to: '/about', label: 'О данных' },
 ];
 
 /** searchable text of a skin: English market name + official Russian name */
@@ -90,7 +98,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const prefs = usePrefs();
   const [menu, setMenu] = useState(false);
   useEffect(() => setMenu(false), [route.path]);
-  const active = (to: string) => route.path === to || route.path.startsWith(to + '/') || (to === '/skins' && route.path.startsWith('/skin/')) || (to === '/collections' && route.path.startsWith('/collection/'));
+  const active = (to: string) => route.path === to || route.path.startsWith(to + '/') || (to === '/skins' && route.path.startsWith('/skin/')) || (to === '/collections' && route.path.startsWith('/collection/')) || (to === '/players' && route.path.startsWith('/player/'));
   return (
     <div className="app">
       <header className="header">
@@ -98,6 +106,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <a href="#/" className="logo"><span className="logo-mark">C2</span><span>CS2 CRAFT</span></a>
           <nav className={'nav' + (menu ? ' open' : '')}>
             {NAV.map((n) => <a key={n.to} href={href(n.to)} className={active(n.to) ? 'active' : ''}>{n.label}</a>)}
+            <div className="nav-more">
+              <button type="button" className={'nav-more-btn' + (MORE.some((n) => active(n.to)) ? ' active' : '')}>Ещё ▾</button>
+              <div className="nav-more-menu">
+                {MORE.map((n) => <a key={n.to} href={href(n.to)} className={active(n.to) ? 'active' : ''}>{n.label}</a>)}
+              </div>
+            </div>
           </nav>
           <div className="header-tools">
             <Search />
