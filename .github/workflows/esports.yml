@@ -1,0 +1,29 @@
+name: Матчи и коэффициенты
+
+on:
+  push:
+    branches: [esports]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: esports
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/esports-probe.mjs probe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: probe
+          path: probe
+          retention-days: 2
