@@ -64,4 +64,9 @@
 .r3d-cross::after { left: -1px; top: -9px; width: 2px; height: 18px; background: linear-gradient(180deg, #3cff6e 0 7px, transparent 7px 11px, #3cff6e 11px); box-shadow: none; }
 .r3d-flash { position: absolute; inset: 0; background: #fff; pointer-events: none; animation: r3d-flash 1.8s ease-out forwards; }
 @keyframes r3d-flash { 0% { opacity: 0; } 6% { opacity: .95; } 40% { opacity: .8; } 100% { opacity: 0; } }
+.r3d-mag { position: absolute; right: 10px; bottom: 10px; border: 2px solid rgba(255, 255, 255, .9); border-radius: 4px; box-shadow: 0 0 0 1px rgba(0, 0, 0, .6), 0 6px 20px rgba(0, 0, 0, .45); pointer-events: none; box-sizing: border-box; }
+.r3d-mag span { position: absolute; left: 6px; top: 5px; padding: 1px 6px; border-radius: 4px; background: rgba(0, 0, 0, .6); color: #fff; font-size: 11px; font-weight: 700; }
+.r3d-cap { position: absolute; left: 10px; bottom: 10px; max-width: 52%; display: flex; flex-direction: column; gap: 2px; padding: 7px 10px; border-radius: 8px; background: rgba(0, 0, 0, .62); color: #fff; font-size: 12px; pointer-events: none; }
+.r3d-cap b { font-size: 13px; }
+.r3d-cap span { color: #b9f5c8; }
 .r3d-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

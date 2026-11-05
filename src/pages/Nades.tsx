@@ -462,7 +462,7 @@ function LineupModal({ m, l, d, names, lang, highlight, fav, onFav, onClose }: {
           <div className="nd-dialog-video">
             {hasMap3D(m.id) ? (
               <Suspense fallback={<div className="r3d"><div className="r3d-stage"><div className="r3d-msg">Загрузка…</div></div></div>}>
-                <Replay3D map={m.id} th={th} title={title} />
+                <Replay3D map={m.id} th={th} title={title} keys={keys} />
               </Suspense>
             ) : <div className="notice">3D-повтор для этой карты пока недоступен.</div>}
             <div className="nd-keys">

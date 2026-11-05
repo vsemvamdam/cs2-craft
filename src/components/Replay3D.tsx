@@ -14,7 +14,7 @@ export const VIEWS: { id: View; ru: string; hint: string }[] = [
 
 const TYPE_COLOR: Record<string, number> = { smoke: 0xdfe5ec, flash: 0xffe066, molotov: 0xff7b3a, he: 0xff4d6d, decoy: 0x9aa5b1 };
 const SIDE_COLOR = { T: 0xd8a45a, CT: 0x6f9ed8 };
-const PRE = 1.3; // seconds of aiming before the release
+const PRE = 2.6; // seconds of aiming (first person, crosshair + zoom) before the release
 const POST = 3.2; // seconds after landing
 
 const VERT = `
@@ -42,8 +42,10 @@ void main() {
 
 const ease = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 
-export default function Replay3D({ map, th, title }: { map: string; th: Throw; title?: string }) {
+export default function Replay3D({ map, th, title, keys }: { map: string; th: Throw; title?: string; keys?: string[] }) {
   const host = useRef<HTMLDivElement>(null);
+  const magRef = useRef<HTMLDivElement>(null);
+  const capRef = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View>('video');
   const [held, setHeld] = useState<View | null>(null);
   const [playing, setPlaying] = useState(true);
@@ -97,6 +99,35 @@ export default function Replay3D({ map, th, title }: { map: string; th: Throw; t
     const sun = new THREE.DirectionalLight(0xffffff, 1.4);
     sun.position.set(0.35, 0.85, 0.4);
     scene.add(sun);
+    // zoom window: same eye, ~4× narrower field of view
+    const MAG = 4;
+    const magCam = new THREE.PerspectiveCamera(73.74 / MAG, 4 / 3, 2, 16000);
+    // crosshair drawn into the frame itself (so it is also in the downloaded video): classic green CS2 cross
+    const hud = new THREE.Scene();
+    const hudCam = new THREE.OrthographicCamera(-1, 1, 1, -1, -1, 1);
+    const crossGroup = new THREE.Group();
+    {
+      const bar = (x: number, y: number, w: number, h: number, c: number, z: number) => {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: c, depthTest: false }));
+        m.position.set(x, y, z);
+        crossGroup.add(m);
+      };
+      const L = 7, G = 4, T = 2;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const cx = dx * (G + L / 2), cy = dy * (G + L / 2), w = dx ? L : T, h = dx ? T : L;
+        bar(cx, cy, w + 2, h + 2, 0x000000, 0);
+        bar(cx, cy, w, h, 0x3cff6e, 0.5);
+      }
+      hud.add(crossGroup);
+    }
+    const drawHud = (w: number, h: number, scale: number) => {
+      hudCam.left = -w / 2; hudCam.right = w / 2; hudCam.top = h / 2; hudCam.bottom = -h / 2;
+      hudCam.updateProjectionMatrix();
+      crossGroup.scale.setScalar(scale);
+      renderer.autoClear = false;
+      renderer.render(hud, hudCam);
+      renderer.autoClear = true;
+    };
 
     const color = TYPE_COLOR[th.type] ?? 0xffffff;
     const path = buildPath(th);
@@ -157,6 +188,32 @@ export default function Replay3D({ map, th, title }: { map: string; th: Throw; t
     };
     ring(feet, 0x3ccf7a, 22);
     const landRing = ring(land, color, 40);
+    // where the crosshair points: found by a ray from the eyes once the map is loaded
+    const aimPoint = eye.clone().addScaledVector(fwd, 2500);
+    const laserGeo = new THREE.BufferGeometry().setFromPoints([eye, aimPoint]);
+    const laser = new THREE.Line(laserGeo, new THREE.LineBasicMaterial({ color: 0x3cff6e, transparent: true, opacity: 0.85, depthTest: false }));
+    laser.renderOrder = 8;
+    scene.add(laser);
+    const aimMark = new THREE.Group();
+    {
+      const mk = (r0: number, r1: number, c: number, o: number) => {
+        const m = new THREE.Mesh(new THREE.RingGeometry(r0, r1, 32), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: o, depthTest: false, side: THREE.DoubleSide }));
+        m.renderOrder = 9;
+        aimMark.add(m);
+      };
+      mk(0.62, 1, 0x3cff6e, 0.95);
+      mk(0, 0.22, 0x3cff6e, 0.95);
+      mk(1, 1.25, 0x000000, 0.5);
+    }
+    scene.add(aimMark);
+    const placeAim = (dist: number) => {
+      aimPoint.copy(eye).addScaledVector(fwd, dist);
+      laserGeo.setFromPoints([eye, aimPoint]);
+      aimMark.position.copy(aimPoint).addScaledVector(fwd, -2);
+      aimMark.lookAt(eye);
+      aimMark.scale.setScalar(Math.max(6, dist * 0.018));
+    };
+    placeAim(2500);
 
     // ---- effects ------------------------------------------------------------
     const fx = new THREE.Group();
@@ -232,6 +289,7 @@ export default function Replay3D({ map, th, title }: { map: string; th: Throw; t
     };
     /** once the map is loaded: keep the cameras out of the walls */
     const placeCameras = () => {
+      placeAim(Math.max(40, freeDist(eye, fwd, 6000)));
       // position view: from behind the player, the direction with the most free space
       let best = -1;
       for (const deg of [180, 155, 205, 130, 230, 100, 260]) {
@@ -331,8 +389,10 @@ export default function Replay3D({ map, th, title }: { map: string; th: Throw; t
       }
       trailGeo.setDrawRange(0, k / 3);
       trailGeo.attributes.position.needsUpdate = true;
-      fullLine.visible = v !== 'video' || tf < 0;
+      const fp = v === 'aim' || (v === 'video' && tf < 0.55); // first person: clean view like in the game
+      fullLine.visible = !fp && (v !== 'video' || tf < 0);
       landRing.visible = v !== 'video' && v !== 'aim';
+      laser.visible = aimMark.visible = v === 'pos' || v === 'free';
 
       // effect after landing
       const te = tf - flight;
@@ -392,7 +452,10 @@ export default function Replay3D({ map, th, title }: { map: string; th: Throw; t
             wantLook = gp.clone().addScaledVector(vel, 120);
           } else {
             // slow push-in from a spot on the flight path towards the result
-            wantPos = tmp2.copy(resCam).lerp(resLook, Math.min(0.35, Math.max(0, te) * 0.08)).clone();
+            const keep = th.type === 'smoke' ? 300 : 120; // never push into the cloud
+            const d0 = resCam.distanceTo(resLook);
+            const push = Math.min(0.35, Math.max(0, te) * 0.08, Math.max(0, (d0 - keep) / d0));
+            wantPos = tmp2.copy(resCam).lerp(resLook, push).clone();
             wantLook = resLook;
           }
           const s = 1 - Math.exp(-dt * (flying ? 3.2 : 2.2));
@@ -407,6 +470,27 @@ export default function Replay3D({ map, th, title }: { map: string; th: Throw; t
       lastView = v;
       uniforms.uCam.value.copy(camera.position);
       renderer.render(scene, camera);
+      const ready = !!mapMesh;
+      const W = el.clientWidth || 640, H = el.clientHeight || 360;
+      if (fp && ready) {
+        drawHud(W, H, 1);
+        // zoom window in the bottom-right corner: exactly what is under the crosshair
+        const mw = Math.round(Math.min(W * 0.34, 300)), mh = Math.round(mw * 0.62);
+        magCam.position.copy(eye);
+        magCam.lookAt(tmp2.copy(eye).add(fwd));
+        magCam.aspect = mw / mh;
+        magCam.updateProjectionMatrix();
+        renderer.setScissorTest(true);
+        renderer.setViewport(W - mw - 10, 10, mw, mh);
+        renderer.setScissor(W - mw - 10, 10, mw, mh);
+        renderer.render(scene, magCam);
+        drawHud(mw, mh, 1.6);
+        renderer.setScissorTest(false);
+        renderer.setViewport(0, 0, W, H);
+        const mg = magRef.current;
+        if (mg) { mg.style.display = ''; mg.style.width = mw + 'px'; mg.style.height = mh + 'px'; }
+      } else if (magRef.current) magRef.current.style.display = 'none';
+      if (capRef.current) capRef.current.style.display = ready && fp && tf < 0 ? '' : 'none';
     };
 
     loadMapGeometry(map)
@@ -434,6 +518,7 @@ export default function Replay3D({ map, th, title }: { map: string; th: Throw; t
         if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
         else mat?.dispose();
       });
+      hud.traverse((o) => { const m = o as THREE.Mesh; m.geometry?.dispose(); (m.material as THREE.Material | undefined)?.dispose(); });
       renderer.dispose();
       renderer.domElement.remove();
     };
@@ -455,7 +540,11 @@ export default function Replay3D({ map, th, title }: { map: string; th: Throw; t
   return (
     <div className="r3d">
       <div className="r3d-stage" ref={host}>
-        {active === 'aim' && status === 'ready' && <div className="r3d-cross" aria-hidden />}
+        <div ref={magRef} className="r3d-mag" style={{ display: 'none' }} aria-hidden><span>Прицел ×4</span></div>
+        <div ref={capRef} className="r3d-cap" style={{ display: 'none' }}>
+          <b>Наведи прицел и бросай</b>
+          {keys?.length ? <span>{keys.join(' + ')}</span> : null}
+        </div>
         {flash > 0 && <div key={flash} className="r3d-flash" />}
         {status !== 'ready' && (
           <div className="r3d-msg">
