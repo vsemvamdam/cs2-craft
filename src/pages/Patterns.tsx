@@ -1,6 +1,36 @@
 import { useMemo, useState } from 'react';
 import { DOPPLER_PHASES, FADE_SUPPORTED_WEAPONS, NOTABLE_SEEDS, PATTERN_FINISHES, findSeedTier, getFadePercentage, getFadeTable, type FadeFinish } from '../lib/patterns';
 import { href } from '../lib/router';
+import { useDB, usePrices } from '../lib/hooks';
+import { imgUrl, type Indexed, type Prices, type Skin } from '../lib/data';
+import { money, skinPrice, usePrefs } from '../lib/prefs';
+import { rarityColor } from '../components/ui';
+
+/** the skin of a weapon + finish (e.g. «Karambit» + «Fade») in the item database */
+function findSkin(db: Indexed | null, weapon: string, finish: string): Skin | null {
+  if (!db) return null;
+  return db.skins.find((x) => x.wpn === weapon && x.fin === finish) || null;
+}
+
+/** picture of the selected skin with its name, price and a link to its page */
+function SkinShowcase({ skin, prices, phase, note }: { skin: Skin | null; prices: Prices | null; phase?: string; note?: string }) {
+  const { source, currency } = usePrefs();
+  if (!skin) return <div className="pt-show pt-empty small muted">Загрузка картинки…</div>;
+  const ph = phase ? skin.phases?.find((x) => x.ph === phase) : undefined;
+  const all = [0, 1, 2, 3, 4].map((w) => skinPrice(prices, skin, '', w, source, ph?.ph)).filter((x): x is number => x != null);
+  const best = all.length ? Math.min(...all) : null;
+  return (
+    <a className="pt-show" href={href(`/skin/${skin.id}${ph ? `?ph=${encodeURIComponent(ph.ph)}` : ''}`)} title="Открыть страницу скина">
+      <img src={imgUrl(ph?.img || skin.img, 512)} alt={skin.name} loading="lazy" style={{ filter: `drop-shadow(0 6px 18px ${rarityColor(skin)}55)` }} />
+      <div className="pt-show-cap">
+        <b>{skin.name}{ph ? ` · ${ph.ph}` : ''}</b>
+        {skin.ru && <span className="tiny muted">{skin.ru}</span>}
+        <span className="tiny muted">{best != null ? <>от <b className="num" style={{ color: 'var(--text)' }}>{money(best, prices, currency)}</b> · </> : null}страница скина →</span>
+        {note && <span className="tiny faint">{note}</span>}
+      </div>
+    </a>
+  );
+}
 
 export default function Patterns() {
   return (
@@ -26,12 +56,15 @@ export default function Patterns() {
           ))}
         </div>
       </div>
+      <style>{`.pt-show{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:14px;align-items:center;padding:12px;border-radius:12px;background:radial-gradient(120% 120% at 30% 40%,var(--surface-3),var(--surface-2));border:1px solid var(--border);color:inherit}.pt-show:hover{border-color:color-mix(in srgb,var(--accent) 50%,var(--border))}.pt-show img{width:100%;aspect-ratio:4/3;object-fit:contain}.pt-show-cap{display:flex;flex-direction:column;gap:4px;min-width:0}.pt-empty{min-height:120px;display:grid;place-items:center}.pt-thumb{width:84px;height:56px;object-fit:contain;display:block}.pt-fade{height:6px;border-radius:99px;background:var(--surface-3);margin-top:8px;overflow:hidden}.pt-fade span{display:block;height:100%;background:linear-gradient(90deg,#f6d743,#ef5da8,#7b5cff)}@media (max-width:560px){.pt-show{grid-template-columns:1fr}}`}</style>
       <p className="tiny faint">Расчёт процента «Градиента» портирован из открытого csgo-fade-percentage-calculator (MIT). Списки сидов — только подтверждённые минимум двумя независимыми источниками сообщества.</p>
     </div>
   );
 }
 
 function FadeCalc() {
+  const db = useDB();
+  const prices = usePrices();
   const [finish, setFinish] = useState<FadeFinish>('Fade');
   const weapons = FADE_SUPPORTED_WEAPONS[finish];
   const [weapon, setWeapon] = useState('Karambit');
@@ -53,10 +86,11 @@ function FadeCalc() {
         <select className="select grow" value={w} onChange={(e) => setWeapon(e.target.value)}>{weapons.map((x) => <option key={x} value={x}>{x}</option>)}</select>
         <input className="input num" style={{ width: 100 }} value={seed} inputMode="numeric" onChange={(e) => setSeed(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="сид" />
       </div>
+      <SkinShowcase skin={findSkin(db, w, finish)} prices={prices} note="Картинка — общий вид скина; как ляжет градиент на конкретный сид, показывает процент ниже." />
       {r ? (
         <div className="kpis">
-          <div className="kpi"><div className="label">Процент</div><div className="value">{r.percentage.toFixed(2)}%</div></div>
-          <div className="kpi"><div className="label">Место</div><div className="value">{r.ranking}</div></div>
+          <div className="kpi"><div className="label">Процент</div><div className="value">{r.percentage.toFixed(2)}%</div><div className="pt-fade"><span style={{ width: `${r.percentage}%` }} /></div></div>
+          <div className="kpi"><div className="label">Место</div><div className="value">{r.ranking}<span className="small muted" style={{ fontWeight: 500 }}> из 1001</span></div></div>
         </div>
       ) : <div className="notice">Введите сид от 0 до 1000.</div>}
       <div className="small muted">Топ сидов для {w} | {finish}:</div>
@@ -66,6 +100,8 @@ function FadeCalc() {
 }
 
 function SeedLookup() {
+  const db = useDB();
+  const prices = usePrices();
   const items = useMemo(() => [...new Set(NOTABLE_SEEDS.map((l) => `${l.weapon}|${l.finish}`))], []);
   const [item, setItem] = useState(items[0] || '');
   const [seed, setSeed] = useState('');
@@ -82,6 +118,7 @@ function SeedLookup() {
         </select>
         <input className="input num" style={{ width: 100 }} value={seed} inputMode="numeric" onChange={(e) => setSeed(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="ваш сид" />
       </div>
+      <SkinShowcase skin={findSkin(db, wpn, fin)} prices={prices} />
       {seed && (tier ? <div className="notice warn">Сид <b className="num">{n}</b> — <b>{tier.tierRu}</b>{tier.noteRu ? `. ${tier.noteRu}` : ''}</div> : <div className="notice">Сид {seed} не входит в известные списки для этого предмета.</div>)}
       <div className="stack" style={{ gap: 6 }}>
         {lists.map((l) => (
@@ -97,15 +134,22 @@ function SeedLookup() {
 }
 
 function DopplerTable() {
+  const db = useDB();
+  const ref = { Doppler: findSkin(db, 'Karambit', 'Doppler'), 'Gamma Doppler': findSkin(db, 'Karambit', 'Gamma Doppler') } as Record<string, Skin | null>;
   return (
     <div className="card">
-      <div className="card-head"><h3>Фазы «Волн» (Doppler) и «Гамма-волн»</h3><span className="small muted">шансы — оценки сообщества, Valve их не публикует</span></div>
+      <div className="card-head"><h3>Фазы «Волн» (Doppler) и «Гамма-волн»</h3><span className="small muted">картинки — Karambit; шансы — оценки сообщества, Valve их не публикует</span></div>
       <div className="table-wrap">
         <table className="table">
-          <thead><tr><th>Отделка</th><th>Фаза</th><th>Как выглядит</th><th className="r">≈ Доля</th><th className="r">Paint index</th></tr></thead>
+          <thead><tr><th style={{ width: 92 }} /><th>Отделка</th><th>Фаза</th><th>Как выглядит</th><th className="r">≈ Доля</th><th className="r">Paint index</th></tr></thead>
           <tbody>
             {DOPPLER_PHASES.map((p) => (
               <tr key={p.finish + p.phase}>
+                <td>{(() => {
+                  const sk = ref[p.finish];
+                  const ph = sk?.phases?.find((x) => x.ph === p.phase);
+                  return sk && ph ? <a href={href(`/skin/${sk.id}?ph=${encodeURIComponent(ph.ph)}`)} title={`${sk.name} · ${ph.ph}`}><img className="pt-thumb" src={imgUrl(ph.img, 128)} alt="" loading="lazy" /></a> : null;
+                })()}</td>
                 <td className="nowrap">{p.finish === 'Doppler' ? 'Волны' : 'Гамма-волны'}</td>
                 <td className="nowrap"><b>{p.titleRu}</b>{p.isGem ? ' 💎' : ''}</td>
                 <td className="muted small">{p.descriptionRu}</td>
