@@ -53,7 +53,7 @@ jobs:
           ODDS_REFRESH_MIN: ${{ vars.ODDS_REFRESH_MIN }}
           ODDS_MONTHLY_LIMIT: ${{ vars.ODDS_MONTHLY_LIMIT }}
           FORCE_ODDS: ${{ inputs.odds }}
-        run: node scripts/fetch-esports.mjs --prev esports-prev --out esports-out ${{ github.ref == 'refs/heads/esports' && '--dump esports-dump' || '' }}
+        run: node scripts/fetch-esports.mjs --prev esports-prev --out esports-out
       - name: Опубликовать в ветку esports-data
         run: |
           node -e "const d=require('./esports-out/esports.json'); if(d.v!==1||!Array.isArray(d.matches)) process.exit(1)"
@@ -66,15 +66,6 @@ jobs:
           git commit -q -m "Данные матчей $(date -u '+%Y-%m-%d %H:%M UTC')"
           git push -q -f "https://github.com/${{ github.repository }}.git" esports-data
           echo "опубликовано: $(du -h esports.json | cut -f1)"
-      # временно, только в ветке разработки: сырые ответы Liquipedia/Polymarket для отладки разбора
-      - name: Отладка — сырые ответы
+      - name: Убрать служебную ветку отладки
         if: github.ref == 'refs/heads/esports'
-        run: |
-          [ -d esports-dump ] || exit 0
-          cd esports-dump
-          git init -q -b esports-probe
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config http.https://github.com/.extraheader "$(git -C .. config http.https://github.com/.extraheader)"
-          git add -A && git commit -q -m dump
-          git push -q -f "https://github.com/${{ github.repository }}.git" esports-probe
+        run: git push -q origin --delete esports-probe || true

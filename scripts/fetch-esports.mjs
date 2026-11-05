@@ -80,7 +80,8 @@ try {
 }
 
 // finished results: this run's + earlier ones (the ticker only lists the last N)
-const keyOf = (m) => matchKey(m) + '|' + Math.round(m.start / (6 * H));
+// same match across runs; bracket slots (TBD) differ only by time
+const keyOf = (m) => matchKey(m) + '|' + (m.t1.tbd || m.t2.tbd ? m.start : Math.round(m.start / (6 * H)));
 const byKey = new Map();
 for (const m of cache.results) if (m.start > NOW - RESULTS_KEEP) byKey.set(keyOf(m), m);
 for (const m of matches) {
