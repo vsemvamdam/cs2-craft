@@ -66,6 +66,7 @@ npm test              # проверка математики контракто
 - База предметов: ByMykel/CSGO-API (MIT); официальные русские названия — из файлов игры через ByMykel/counter-strike-file-tracker (MIT). Изображения — CDN Steam, © Valve.
 - Кодирование прицелов: [csgo-sharecode](https://github.com/akiver/csgo-sharecode) (MIT).
 - Формат inspect-ссылок — по описанию [cs2-inspect-create](https://github.com/candyboyz/cs2-inspect-create) (MIT), своя реализация в `src/lib/inspect.ts`.
+- Про-демки для раскидок: датасет [OpenCS2](https://huggingface.co/datasets/blanchon/opencs2_dataset_demo) (CC BY 4.0, зеркало демок HLTV) и [awpy-fixtures](https://github.com/pnxenopoulos/awpy-fixtures); разбор — [demoparser2](https://github.com/LaihoE/demoparser) (MIT).
 - Графики: [Lightweight Charts](https://github.com/tradingview/lightweight-charts) (Apache-2.0).
 
 Фанатский проект, не связан с Valve Corporation. Не финансовая рекомендация.

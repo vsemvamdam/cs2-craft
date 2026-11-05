@@ -76,7 +76,7 @@ DETONATE_EVENTS = {
 PLAYER_PROPS = [
     "X", "Y", "Z", "pitch", "yaw",
     "velocity_X", "velocity_Y", "velocity_Z",
-    "duck_amount", "is_walking", "is_airborne", "team_num",
+    "duck_amount", "is_walking", "is_airborne", "team_num", "team_clan_name",
 ]
 
 

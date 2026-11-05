@@ -57,6 +57,7 @@ export default function Nades({ map }: { map?: string }) {
       <div className="card pad stack small">
         <h3>Откуда данные</h3>
         <p className="muted">Скрипт <span className="kbd">tools/demos/extract_nades.py</span> разбирает .dem турнирных матчей (demoparser2) и сохраняет каждый бросок: игрок, команда, сторона, раунд, позиция и углы в момент броска, скорость (прыжок/бег), траектория и точка взрыва. Видео трансляций сайт не хранит — у броска есть ссылка на матч и на VOD с таймкодом, если её указали при загрузке демки.</p>
+        <p className="muted">Демки: открытый датасет <a className="link" href="https://huggingface.co/datasets/blanchon/opencs2_dataset_demo" target="_blank" rel="noreferrer">OpenCS2</a> (CC BY 4.0, зеркало демок HLTV) и тестовые про-демки <a className="link" href="https://github.com/pnxenopoulos/awpy-fixtures" target="_blank" rel="noreferrer">awpy-fixtures</a>. Разбор — demoparser2 (MIT).</p>
       </div>
     </div>
   );

@@ -2,10 +2,18 @@ name: Раскидки из демок
 
 # Разбирает про-демки и обновляет public/data/nades/<карта>.json:
 #  * ссылки из tools/demos/urls.txt (архивы демок, например загруженные в Release);
+#  * открытый датасет OpenCS2 (Hugging Face blanchon/opencs2_dataset_demo, CC BY 4.0): ~2000 карт HLTV, март–апрель 2026;
 #  * по желанию — датасет CounterQuant на Hugging Face (сейчас закрыт: отвечает 401).
 on:
   workflow_dispatch:
     inputs:
+      opencs2:
+        description: 'Взять новые демки из OpenCS2'
+        type: boolean
+        default: true
+      opencs2_per_map:
+        description: 'Сколько демок OpenCS2 на карту'
+        default: '3'
       hf:
         description: 'Попробовать датасет CounterQuant (Hugging Face)'
         type: boolean
@@ -15,7 +23,7 @@ on:
         default: '4'
   push:
     branches: [main]
-    paths: ['tools/demos/urls.txt']
+    paths: ['tools/demos/urls.txt', 'tools/demos/fetch_opencs2.py']
 
 permissions:
   contents: write
@@ -38,7 +46,11 @@ jobs:
           python-version: '3.12'
       - name: Распаковщики архивов
         run: sudo apt-get update -qq && (sudo apt-get install -y -qq unrar || sudo apt-get install -y -qq unar) && sudo apt-get install -y -qq p7zip-full zstd
-      - run: pip install demoparser2 huggingface_hub
+      - run: pip install demoparser2 huggingface_hub pandas pyarrow
+      - name: Про-матчи из OpenCS2 (HLTV, март–апрель 2026)
+        if: ${{ github.event_name == 'push' || inputs.opencs2 }}
+        continue-on-error: true
+        run: python3 tools/demos/fetch_opencs2.py --per-map "${{ inputs.opencs2_per_map || '3' }}"
       - name: Свежие про-матчи (CounterQuant / HLTV)
         if: ${{ inputs.hf }}
         continue-on-error: true
