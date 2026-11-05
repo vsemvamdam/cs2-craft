@@ -67,30 +67,43 @@ async function cbrRates() {
   }
 }
 
-/** Steam market search — pages of 100 sorted by name; resumable via cursor. */
+/** Steam market search — pages of 100 sorted by name; resumable via cursor.
+ *  Steam often throttles datacenter IPs, so this is best-effort: it gives up after a run of
+ *  failures and records what it saw in meta.steamDiag (visible in the data-store release). */
 async function steamSearch(current, meta, budgetMin) {
   const budget = timeBudget(budgetMin);
   let start = meta.steamCursor || 0;
   if (!meta.steamPassStarted || start === 0) meta.steamPassStarted = Date.now();
   let delay = 3500;
-  let pages = 0, got = 0;
+  let pages = 0, got = 0, fails = 0;
+  const diag = { at: new Date().toISOString(), statuses: {}, sample: '' };
+  const fail = async (key, wait, sample = '') => {
+    diag.statuses[key] = (diag.statuses[key] || 0) + 1;
+    if (sample && !diag.sample) diag.sample = sample.slice(0, 300);
+    fails++;
+    await sleep(wait);
+  };
   while (!budget.over()) {
-    const url = `https://steamcommunity.com/market/search/render/?query=&start=${start}&count=100&search_descriptions=0&sort_column=name&sort_dir=asc&appid=730&norender=1&l=english&currency=1`;
+    if (fails >= 8 && pages === 0) { console.warn('steam: too many failures without a single page — giving up for this run'); break; }
+    if (fails >= 20) { console.warn('steam: too many failures — giving up for this run'); break; }
+    const url = `https://steamcommunity.com/market/search/render/?query=&start=${start}&count=100&search_descriptions=0&sort_column=name&sort_dir=asc&appid=730&norender=1`;
     let r;
     try {
-      r = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: AbortSignal.timeout(45000) });
+      r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) cs2-craft', Accept: 'application/json, text/javascript, */*; q=0.01', 'Accept-Language': 'en-US,en;q=0.9', Referer: 'https://steamcommunity.com/market/search?appid=730' }, signal: AbortSignal.timeout(45000) });
     } catch (e) {
-      console.warn(`steam ${start}: ${e.message}`); await sleep(30000); continue;
+      console.warn(`steam ${start}: ${e.message}`); await fail('network', 20000, e.message); continue;
     }
     if (r.status === 429) {
       delay = Math.min(delay * 1.5, 20000);
-      console.warn(`steam 429 at ${start}; cooling down 90s, delay → ${Math.round(delay)}ms`);
-      await sleep(90000); continue;
+      console.warn(`steam 429 at ${start}; cooling down 60s, delay → ${Math.round(delay)}ms`);
+      await fail('429', 60000); continue;
     }
-    if (!r.ok) { console.warn(`steam HTTP ${r.status} at ${start}`); await sleep(30000); continue; }
+    if (!r.ok) { console.warn(`steam HTTP ${r.status} at ${start}`); await fail(String(r.status), 20000, await r.text().catch(() => '')); continue; }
+    const text = await r.text();
     let j;
-    try { j = await r.json(); } catch { await sleep(20000); continue; }
-    if (!j || !j.success || !Array.isArray(j.results)) { console.warn('steam: bad payload'); await sleep(30000); continue; }
+    try { j = JSON.parse(text); } catch { await fail('not-json', 15000, text); continue; }
+    if (!j || !j.success || !Array.isArray(j.results)) { console.warn('steam: bad payload'); await fail('bad-payload', 20000, text); continue; }
+    fails = Math.max(0, fails - 1);
     meta.steamTotal = j.total_count;
     const now = Date.now();
     for (const it of j.results) {
@@ -109,7 +122,9 @@ async function steamSearch(current, meta, budgetMin) {
     if (pages % 25 === 0) console.log(`steam: ${start}/${j.total_count}`);
     await sleep(delay);
   }
-  console.log(`steam: ${pages} pages, ${got} items this run, cursor ${meta.steamCursor}`);
+  diag.pages = pages; diag.items = got;
+  meta.steamDiag = diag;
+  console.log(`steam: ${pages} pages, ${got} items this run, cursor ${meta.steamCursor}`, JSON.stringify(diag.statuses));
 }
 
 async function main() {

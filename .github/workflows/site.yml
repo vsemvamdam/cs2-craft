@@ -43,7 +43,7 @@ jobs:
           if { [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.quick }}" = "true" ]; } && [ -f store/prices/current.json ]; then
             echo "push: обновляю только Skinport и курс"; SKIP_STEAM=1 node scripts/fetch-prices.mjs
           else
-            STEAM_BUDGET_MIN=45 node scripts/fetch-prices.mjs
+            STEAM_BUDGET_MIN=30 node scripts/fetch-prices.mjs
           fi
       - name: Сохранить хранилище цен
         if: always()
