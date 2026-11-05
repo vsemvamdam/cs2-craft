@@ -160,10 +160,12 @@ if (!KEY) {
   op.error = 'nokey';
   delete cache.odds.fixtures;
 } else {
-  const due = FORCE_ODDS || !cache.odds.at || NOW - cache.odds.at >= ODDS_EVERY || cache.odds.books !== BOOKS.join(',');
+  const last = cache.odds.tried || cache.odds.at;
+  const due = FORCE_ODDS || !last || NOW - last >= ODDS_EVERY || cache.odds.books !== BOOKS.join(',');
   const budget = cache.odds.used + 2 <= ODDS_MONTHLY;
   const anySoon = live.some((m) => m.start < NOW + 3 * 24 * H);
   if (due && budget && anySoon) {
+    cache.odds.tried = NOW; // also after a failure: don't retry every run
     try {
       const r = await fetchOddsPapi({ key: KEY, bookmakers: BOOKS, now: NOW_MS, log });
       cache.odds.used += r.used;
@@ -173,7 +175,7 @@ if (!KEY) {
       delete cache.odds.error;
     } catch (e) {
       cache.odds.used += 1;
-      cache.odds.at = NOW; // don't retry every run
+      cache.odds.books = BOOKS.join(',');
       cache.odds.error = e.status === 401 || e.status === 403 ? 'badkey' : e.status === 429 ? 'limit' : errText(e);
       log('oddspapi FAILED:', cache.odds.error === 'badkey' ? 'ключ не принят (401/403)' : cache.odds.error);
     }

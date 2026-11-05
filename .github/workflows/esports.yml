@@ -66,6 +66,3 @@ jobs:
           git commit -q -m "Данные матчей $(date -u '+%Y-%m-%d %H:%M UTC')"
           git push -q -f "https://github.com/${{ github.repository }}.git" esports-data
           echo "опубликовано: $(du -h esports.json | cut -f1)"
-      - name: Убрать служебную ветку отладки
-        if: github.ref == 'refs/heads/esports'
-        run: git push -q origin --delete esports-probe || true

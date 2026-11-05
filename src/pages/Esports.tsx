@@ -455,7 +455,7 @@ function MatchRow({ m, data, now, oddsCol }: { m: Match; data: Data; now: number
           <div className="es-actions">
             {soon && <span className="tiny es-soon">{soon}</span>}
             {m.streams?.map((s) => (
-              <a key={s.u} className="es-stream" href={s.u} target="_blank" rel="noreferrer nofollow">{STREAM[s.p] || s.p}</a>
+              <a key={s.u} className={'es-stream p-' + s.p} href={s.u} target="_blank" rel="noreferrer nofollow">{STREAM[s.p] || s.p}</a>
             ))}
             {o && (
               <button className={'es-books' + (open ? ' on' : '')} onClick={() => setOpen((x) => !x)} aria-expanded={open} title="Коэффициенты по источникам">

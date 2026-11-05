@@ -80,9 +80,9 @@ function streamLinks(container) {
     if (m) {
       p = m[1].toLowerCase();
       const id = decodeURIComponent(m[2]);
-      if (p.startsWith('twitch')) u = 'https://www.twitch.tv/' + id;
-      else if (p.startsWith('kick')) u = 'https://kick.com/' + id;
-      else if (p.startsWith('youtube')) u = WIKI + 'Special:Stream/' + m[1] + '/' + m[2];
+      // Twitch values are channel names; other platforms go through Liquipedia's stream page,
+      // which resolves its own aliases to the real channel
+      if (p.startsWith('twitch') && /^\w+$/.test(id)) u = 'https://www.twitch.tv/' + id;
       else u = WIKI + 'Special:Stream/' + m[1] + '/' + m[2];
       p = p.replace(/[^a-z]/g, '');
     } else if (/^https?:\/\/(www\.)?(twitch\.tv|kick\.com|youtube\.com\/(live|watch|@)|youtu\.be)/.test(href) && !a.closest('.match-info-vods-area')) {

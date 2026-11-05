@@ -59,6 +59,8 @@
 .es-soon { color: var(--warn); font-weight: 600; }
 .es-stream { display: inline-flex; align-items: center; height: 24px; padding: 0 9px; border-radius: 6px; font-size: 12px; font-weight: 650; background: color-mix(in srgb, #9146ff 18%, var(--surface-2)); color: var(--text); border: 1px solid color-mix(in srgb, #9146ff 35%, var(--border)); }
 .es-stream:hover { filter: brightness(1.15); }
+.es-stream.p-kick { background: color-mix(in srgb, #53fc18 14%, var(--surface-2)); border-color: color-mix(in srgb, #53fc18 35%, var(--border)); }
+.es-stream.p-youtube { background: color-mix(in srgb, #ff0033 14%, var(--surface-2)); border-color: color-mix(in srgb, #ff0033 35%, var(--border)); }
 .es-books { border: 1px solid var(--border); background: transparent; color: var(--muted); border-radius: 6px; height: 24px; padding: 0 8px; font-size: 12px; cursor: pointer; white-space: nowrap; }
 .es-books:hover, .es-books.on { color: var(--text); background: var(--surface-2); }
 .es-bookt { grid-area: books; border: 1px solid var(--border); border-radius: var(--radius-s); overflow-x: auto; margin-top: 4px; background: var(--bg-2); }
