@@ -126,7 +126,7 @@ export default function SkinPage({ id }: { id: string }) {
               </div>
             </div>
           )}
-          <PatternBlock skin={skin} />
+          <PatternBlock skin={skin} phase={skin.phases ? phase : undefined} />
         </div>
 
         <div className="stack" style={{ gap: 12 }}>
