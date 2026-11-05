@@ -8,15 +8,6 @@ on:
   schedule:
     - cron: '11,41 * * * *'   # каждые 30 минут
   workflow_dispatch:
-  push:
-    branches: [matches]       # временно: проверка ветки разработки
-    paths:
-      - '.github/workflows/my-matches.yml'
-      - 'scripts/my-matches.mjs'
-      - 'scripts/lib/matches.mjs'
-      - 'scripts/lib/gc-session.mjs'
-      - 'scripts/publish-stats-branch.sh'
-      - 'tools/matches/**'
 
 permissions:
   contents: write

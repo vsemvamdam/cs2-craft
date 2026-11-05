@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { createChart, LineSeries, type UTCTimestamp } from 'lightweight-charts';
 import { Spinner } from '../components/ui';
 import { useAsync, useDB, usePrices } from '../lib/hooks';
@@ -10,6 +10,10 @@ import {
   type GameRow, type Inventory, type Ladder, type Profile,
 } from '../lib/stats';
 import '../styles/stats.css';
+
+const MyMatches = lazy(() => import('../components/MyMatches'));
+/** per-match stats exist only for accounts synced by .github/workflows/my-matches.yml */
+const matchesUrl = (sid: string) => `https://raw.githubusercontent.com/vsemvamdam/cs2-craft/stats-data/matches/${sid}.json`;
 
 export default function Stats({ id }: { id?: string }) {
   const base = useAsync(() => apiBase(), []);
@@ -115,6 +119,7 @@ function ProfilePage({ id }: { id: string }) {
   const p = useAsync(() => api<Profile>(`/api/profile?id=${encodeURIComponent(id)}${fresh ? '&fresh=1' : ''}`), [id, fresh]);
   const { query } = useRoute();
   const tab = query.get('tab') || 'overview';
+  const hasMatches = useAsync(() => fetch(matchesUrl(id), { method: 'HEAD' }).then((r) => r.ok).catch(() => false), [id]);
   useEffect(() => {
     // vanity / link in the address → canonical SteamID64 address
     if (p.data && p.data.steamid !== id) navigate(`/stats/${p.data.steamid}${tab !== 'overview' ? `?tab=${tab}` : ''}`, true);
@@ -134,6 +139,7 @@ function ProfilePage({ id }: { id: string }) {
     { k: 'cs2', ru: 'CS2' },
     { k: 'games', ru: `Игры${d.games ? ` · ${d.games.count}` : ''}` },
     { k: 'inventory', ru: 'Инвентарь' },
+    ...(hasMatches.data ? [{ k: 'matches', ru: 'Матчи' }] : []),
   ];
   return (
     <div className="stack" style={{ gap: 16 }}>
@@ -147,6 +153,7 @@ function ProfilePage({ id }: { id: string }) {
       {tab === 'cs2' && <CS2Stats d={d} />}
       {tab === 'games' && <Games d={d} />}
       {tab === 'inventory' && <InventoryTab steamid={d.steamid} />}
+      {tab === 'matches' && <Suspense fallback={<Spinner />}><MyMatches steamid={d.steamid} /></Suspense>}
       <p className="tiny muted">Данные Steam Web API{d.fetched ? ` · получены ${new Date(d.fetched * 1000).toLocaleString('ru-RU')}` : ''}. Steam отдаёт статистику только по открытым профилям.</p>
     </div>
   );
