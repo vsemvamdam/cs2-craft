@@ -244,10 +244,22 @@ async function main() {
   await fs.writeFile(path.join(OUT, 'db.json'), JSON.stringify(db));
   await fs.writeFile(path.join(OUT, 'stickers.json'), JSON.stringify({ imgPrefix: IMG_PREFIX, stickers: outStickers }));
   await fs.writeFile(path.join(OUT, 'charms.json'), JSON.stringify({ imgPrefix: IMG_PREFIX, charms: outCharms }));
+  // team logos for the matches page: Valve's own team-sticker art (latest paper sticker of each team)
+  const logos = {};
+  const pickLogo = new Map();
+  for (const st of outStickers) {
+    if (!st.team || st.pl || st.team === 'both') continue;
+    if (st.e !== 'Other' && st.e !== 'Paper') continue;
+    const cur = pickLogo.get(st.team);
+    if (!cur || st.d > cur.d) pickLogo.set(st.team, st);
+  }
+  for (const [team, st] of [...pickLogo].sort((a, b) => a[1].d - b[1].d)) for (const k of teamKeys(team)) logos[k] = st.img;
+  await fs.writeFile(path.join(OUT, 'team-logos.json'), JSON.stringify({ imgPrefix: IMG_PREFIX, source: 'Steam: наклейки команд CS2 (© Valve)', logos }));
+  console.log(`team logos: ${pickLogo.size} teams`);
   // all market names we care about (skins + stickers + charms), used by the price fetchers
   const allNames = [...new Set([...generated, ...outStickers.filter((s) => s.m).map((s) => s.m), ...outCharms.map((c) => c.m)])].sort();
   await fs.writeFile(path.join(OUT, 'market-names.json'), JSON.stringify(allNames));
-  for (const f of ['db.json', 'stickers.json', 'charms.json', 'market-names.json']) {
+  for (const f of ['db.json', 'stickers.json', 'charms.json', 'market-names.json', 'team-logos.json']) {
     const st = await fs.stat(path.join(OUT, f));
     console.log(`  ${f}: ${(st.size / 1024).toFixed(0)} KB`);
   }
@@ -255,3 +267,13 @@ async function main() {
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
+
+/** lookup keys of a team name: full normalized name and the name without filler words (Team, Esports, Gaming, Clan…).
+ * The same function is used on the site (src/lib/teams.ts) — keep them in sync. */
+export function teamKeys(name) {
+  const words = name.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/&/g, ' and ').split(/[^a-z0-9]+/).filter(Boolean);
+  const full = words.join('');
+  const base = words.filter((w) => !FILLER.has(w)).join('');
+  return [...new Set([full, base].filter(Boolean))];
+}
+const FILLER = new Set(['team', 'esports', 'esport', 'e', 'sports', 'gaming', 'clan', 'club', 'gg']);

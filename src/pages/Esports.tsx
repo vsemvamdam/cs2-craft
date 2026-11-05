@@ -1,3 +1,4 @@
+import { useTeamLogos } from '../lib/teams';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Spinner } from '../components/ui';
 import { setQuery, useRoute } from '../lib/router';
@@ -182,7 +183,11 @@ function hue(s: string) {
   return h;
 }
 function Mono({ t }: { t: Team }) {
+  const logo = useTeamLogos();
+  const [broken, setBroken] = useState(false);
   if (t.tbd) return <span className="es-mono tbd">?</span>;
+  const src = broken ? null : logo(t.f, t.n);
+  if (src) return <span className="es-mono es-logo" aria-hidden><img src={src} alt="" loading="lazy" onError={() => setBroken(true)} /></span>;
   const letters = (t.n.match(/[A-Za-zА-Яа-я0-9]/g) || ['?']).slice(0, 2).join('').toUpperCase();
   return <span className="es-mono" style={{ ['--h' as string]: hue(t.f || t.n) }} aria-hidden>{letters}</span>;
 }
