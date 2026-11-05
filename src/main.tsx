@@ -17,12 +17,13 @@ const Tools = lazy(() => import('./pages/Tools'));
 const Crosshair = lazy(() => import('./pages/Crosshair'));
 const Callouts = lazy(() => import('./pages/Callouts'));
 const Players = lazy(() => import('./pages/Players'));
+const Stats = lazy(() => import('./pages/Stats'));
 const About = lazy(() => import('./pages/About'));
 const Collections = lazy(() => import('./pages/Collections').then((m) => ({ default: m.Collections })));
 const CollectionPage = lazy(() => import('./pages/Collections').then((m) => ({ default: m.CollectionPage })));
 
 const TITLES: Record<string, string> = {
-  skins: 'Все скины', tradeup: 'Калькулятор крафтов', craft: 'Стикер-крафт', patterns: 'Паттерны', nades: 'Раскидки профи', callouts: 'Коллауты карт', players: 'Игроки', player: 'Игрок', crosshair: 'Генератор прицела', tools: 'Утилиты', collections: 'Коллекции', about: 'О данных',
+  skins: 'Все скины', tradeup: 'Калькулятор крафтов', craft: 'Стикер-крафт', patterns: 'Паттерны', nades: 'Раскидки профи', callouts: 'Коллауты карт', players: 'Игроки', player: 'Игрок', stats: 'Статистика Steam и CS2', crosshair: 'Генератор прицела', tools: 'Утилиты', collections: 'Коллекции', about: 'О данных',
 };
 
 function App() {
@@ -42,6 +43,7 @@ function App() {
     case 'callouts': page = <Callouts map={b} />; break;
     case 'players': page = <Players />; break;
     case 'player': page = <Players sid={b} />; break;
+    case 'stats': page = <Stats id={b} key={b || ''} />; break;
     case 'tools': page = <Tools />; break;
     case 'collections': page = <Collections />; break;
     case 'collection': page = <CollectionPage id={b} key={b} />; break;

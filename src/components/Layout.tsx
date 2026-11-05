@@ -12,6 +12,7 @@ const NAV = [
   { to: '/nades', label: 'Раскидки' },
   { to: '/callouts', label: 'Коллауты' },
   { to: '/players', label: 'Игроки' },
+  { to: '/stats', label: 'Статистика' },
   { to: '/crosshair', label: 'Прицел' },
 ];
 /** less used sections: under «Ещё» on desktop, listed flat in the mobile menu */
