@@ -1,11 +1,19 @@
 name: Раскидки из демок
 
-# Разбирает турнирные демки из tools/demos/urls.txt и обновляет public/data/nades/<карта>.json
+# Разбирает про-демки и обновляет public/data/nades/<карта>.json:
+#  * свежие матчи HLTV Tier 1 из открытого датасета CounterQuant CS2 Demos (Hugging Face, CC BY 4.0);
+#  * плюс любые ссылки из tools/demos/urls.txt.
 on:
+  schedule:
+    - cron: '17 5 * * *'   # раз в день
   workflow_dispatch:
+    inputs:
+      per_map:
+        description: 'Сколько новых демок на карту'
+        default: '4'
   push:
     branches: [main]
-    paths: ['tools/demos/urls.txt']
+    paths: ['tools/demos/urls.txt', 'tools/demos/fetch_hf.py']
 
 permissions:
   contents: write
@@ -18,7 +26,7 @@ concurrency:
 jobs:
   extract:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -27,18 +35,23 @@ jobs:
         with:
           python-version: '3.12'
       - name: Распаковщики архивов
-        run: sudo apt-get update -qq && (sudo apt-get install -y -qq unrar || sudo apt-get install -y -qq unar) && sudo apt-get install -y -qq p7zip-full
-      - run: pip install demoparser2
-      - name: Разбор демок
+        run: sudo apt-get update -qq && (sudo apt-get install -y -qq unrar || sudo apt-get install -y -qq unar) && sudo apt-get install -y -qq p7zip-full zstd
+      - run: pip install demoparser2 huggingface_hub
+      - name: Свежие про-матчи (CounterQuant / HLTV)
+        continue-on-error: true
+        run: python3 tools/demos/fetch_hf.py --per-map "${{ inputs.per_map || '4' }}"
+      - name: Свои ссылки из urls.txt
+        continue-on-error: true
         run: |
-          if ! grep -qvE '^\s*(#|$)' tools/demos/urls.txt; then echo "::notice::В tools/demos/urls.txt пока нет ссылок на демки"; exit 0; fi
+          if ! grep -qvE '^\s*(#|$)' tools/demos/urls.txt; then echo "в urls.txt ссылок нет"; exit 0; fi
           python3 tools/demos/extract_nades.py --from-urls tools/demos/urls.txt
       - name: Сохранить и пересобрать сайт
         run: |
           git config user.name "nades-bot"
           git config user.email "nades-bot@users.noreply.github.com"
-          git add public/data/nades/*.json
-          if git diff --cached --quiet; then echo "нет новых бросков"; exit 0; fi
-          git commit -m "Раскидки: обновлено из демок"
+          git add public/data/nades/*.json tools/demos/processed.json tools/demos/last_run.json 2>/dev/null || true
+          if git diff --cached --quiet; then echo "нет изменений"; exit 0; fi
+          git commit -m "Раскидки: новые броски из про-демок"
+          git pull --rebase -q origin main
           git push
           gh workflow run site.yml -f quick=true
