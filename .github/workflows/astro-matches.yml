@@ -55,3 +55,7 @@ jobs:
           else
             echo "анализа ещё нет"
           fi
+      - name: Транзиты к натальным картам в день матча
+        run: |
+          python3 tools/astro/transits_astro.py --players store/nades-site/players --pl store/matches-hist/players.json --out store/astro-transits
+          scripts/store.sh push astro-transits
