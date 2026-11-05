@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Keeps the price/history stores as assets of the "data-store" GitHub release, so the git
-# history stays small. Usage: scripts/store.sh pull|push <name>  (prices, history, nades-raw, nades-proc, nades-site)   (needs GH_TOKEN)
+# history stays small. Usage: scripts/store.sh pull|push <name>  (prices, history, nades-raw, nades-proc, nades-site, my-matches)   (needs GH_TOKEN)
 set -euo pipefail
 action="$1"; name="$2"
 TAG="data-store"

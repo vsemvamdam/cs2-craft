@@ -94,12 +94,34 @@ npm test              # проверка математики контракто
 
 3D-геометрия карт для повторов — `public/maps3d/*.bin.gz`, собирается `tools/maps3d/build_meshes.py` из коллизионных мешей [awpy-data](https://github.com/pnxenopoulos/awpy-data) (карты © Valve). Русские названия коллаутов — `public/data/callouts/names.json` (с источниками по каждой карте).
 
+## Мои матчи
+
+Статистика матчей своего аккаунта в духе csst.at / Leetify: рейтинг Premier по матчам, результаты, K/D, ADR, HS, KAST, точность, первые дуэли, клатчи, мультикиллы, урон гранатами, карты, оружие и таблица всех 10 игроков. Компонент — `src/components/MyMatches.tsx`.
+
+**`.github/workflows/my-matches.yml`** — каждые 30 минут (`scripts/my-matches.mjs`):
+1. Steam Web API `GetNextMatchSharingCode` отдаёт коды новых матчей после последнего известного;
+2. второй аккаунт Steam (`steam-user`) заходит в CS2 и спрашивает у координатора игры (`globaloffensive`) информацию о матче: счёт, K/D/A и ссылку на демку `replay*.valve.net`;
+3. демка разбирается `tools/matches/match_stats.py` (demoparser2). Valve хранит демки несколько недель — для более старых матчей остаются данные координатора (`demo: false`);
+4. `matches/<steamid>.json` сохраняется в релиз `data-store` (архив `my-matches`) и единственным коммитом в служебную ветку `stats-data`, откуда его читает сайт. Формат файла описан в начале `scripts/my-matches.mjs`.
+
+Нужны четыре секрета (**Settings → Secrets and variables → Actions**); пока их нет, workflow просто пишет, каких не хватает, и завершается без ошибки:
+
+| Секрет | Где взять |
+|---|---|
+| `STEAM_API_KEY` | https://steamcommunity.com/dev/apikey (домен — любой, например `localhost`) |
+| `CS2_AUTH_CODE` | https://help.steampowered.com/ru/wizard/HelpWithGameIssue/?appid=730&issueid=128 → «Код аутентификации» (создать) |
+| `CS2_LAST_SHARECODE` | там же — код последнего завершённого матча (`CSGO-xxxxx-…`), или в CS2: «Смотреть» → «Ваши матчи» → «Поделиться» |
+| `STEAM_BOT_TOKEN` | токен **второго** аккаунта для Steam-клиента: `node scripts/steam-login.mjs --client` (как в разделе выше, но с `--client`). CS2 на нём покупать не нужно — бесплатная лицензия добавится сама |
+
+SteamID64 владельца задан в самом workflow (`CS2_STEAMID`). Токен живёт ~200 дней: если вход перестанет работать, запуск упадёт с подсказкой — выпустите новый токен.
+
 ## Источники и лицензии
 
 - База предметов: ByMykel/CSGO-API (MIT); официальные русские названия — из файлов игры через ByMykel/counter-strike-file-tracker (MIT). Изображения — CDN Steam, © Valve.
 - Кодирование прицелов: [csgo-sharecode](https://github.com/akiver/csgo-sharecode) (MIT).
 - Формат inspect-ссылок — по описанию [cs2-inspect-create](https://github.com/candyboyz/cs2-inspect-create) (MIT), своя реализация в `src/lib/inspect.ts`.
 - Про-демки для раскидок: датасет [OpenCS2](https://huggingface.co/datasets/blanchon/opencs2_dataset_demo) (CC BY 4.0, зеркало демок HLTV) и [awpy-fixtures](https://github.com/pnxenopoulos/awpy-fixtures); разбор — [demoparser2](https://github.com/LaihoE/demoparser) (MIT).
+- Свои матчи: [steam-user](https://github.com/DoctorMcKay/node-steam-user) и [globaloffensive](https://github.com/DoctorMcKay/node-globaloffensive) (MIT) — вход в Steam и координатор CS2; демки — с серверов Valve.
 - Графики: [Lightweight Charts](https://github.com/tradingview/lightweight-charts) (Apache-2.0).
 - 3D: [three.js](https://threejs.org) (MIT), [three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh) (MIT); геометрия карт — [awpy-data](https://github.com/pnxenopoulos/awpy-data), карты © Valve.
 - Матчи и турниры: [Liquipedia](https://liquipedia.net/counterstrike/) через её MediaWiki API, лицензия [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/); логотипы команд не используются. Цены рынка предсказаний: [Polymarket](https://docs.polymarket.com) (публичный API); коэффициенты букмекеров: [OddsPapi](https://oddspapi.io) (по ключу).

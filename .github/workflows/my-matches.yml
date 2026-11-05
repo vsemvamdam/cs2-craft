@@ -1,0 +1,83 @@
+name: Мои матчи CS2
+
+# Статистика матчей своего аккаунта: новые коды матчей (Steam Web API) → координатор CS2 (второй аккаунт,
+# steam-user + globaloffensive) → демка с replay*.valve.net → demoparser2 → matches/<steamid>.json
+# в релизе data-store (архив my-matches) и единственным коммитом ветки stats-data (её читает сайт).
+# Секреты: STEAM_API_KEY, CS2_AUTH_CODE, CS2_LAST_SHARECODE, STEAM_BOT_TOKEN (см. README → «Мои матчи»).
+on:
+  schedule:
+    - cron: '11,41 * * * *'   # каждые 30 минут
+  workflow_dispatch:
+  push:
+    branches: [matches]       # временно: проверка ветки разработки
+    paths:
+      - '.github/workflows/my-matches.yml'
+      - 'scripts/my-matches.mjs'
+      - 'scripts/lib/matches.mjs'
+      - 'scripts/lib/gc-session.mjs'
+      - 'scripts/publish-stats-branch.sh'
+      - 'tools/matches/**'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: my-matches
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CS2_STEAMID: '76561198077054958'
+      STEAM_API_KEY: ${{ secrets.STEAM_API_KEY }}
+      CS2_AUTH_CODE: ${{ secrets.CS2_AUTH_CODE }}
+      CS2_LAST_SHARECODE: ${{ secrets.CS2_LAST_SHARECODE }}
+      STEAM_BOT_TOKEN: ${{ secrets.STEAM_BOT_TOKEN }}
+    steps:
+      - name: Проверить секреты
+        id: chk
+        run: |
+          missing=""
+          [ -n "$STEAM_API_KEY" ] || missing="$missing STEAM_API_KEY"
+          [ -n "$CS2_AUTH_CODE" ] || missing="$missing CS2_AUTH_CODE"
+          [ -n "$CS2_LAST_SHARECODE" ] || missing="$missing CS2_LAST_SHARECODE"
+          [ -n "$STEAM_BOT_TOKEN" ] || missing="$missing STEAM_BOT_TOKEN"
+          if [ -n "$missing" ]; then
+            echo "::notice::Синхронизация матчей пропущена: не заданы секреты${missing}. Добавьте их в Settings → Secrets and variables → Actions (см. README → «Мои матчи»)."
+            printf '### Мои матчи\nНе заданы секреты:%s — синхронизация пропущена.\n' "$missing" >> "$GITHUB_STEP_SUMMARY"
+            echo "ok=0" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=1" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.chk.outputs.ok == '1'
+      - uses: actions/setup-node@v4
+        if: steps.chk.outputs.ok == '1'
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        if: steps.chk.outputs.ok == '1'
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: tools/matches/requirements.txt
+      - name: Зависимости
+        if: steps.chk.outputs.ok == '1'
+        run: npm ci && pip install -q -r tools/matches/requirements.txt
+      - name: Хранилище матчей
+        if: steps.chk.outputs.ok == '1'
+        run: scripts/store.sh pull my-matches
+      - name: Синхронизация (Steam → координатор CS2 → демки)
+        id: sync
+        if: steps.chk.outputs.ok == '1'
+        run: node scripts/my-matches.mjs
+      - name: Сохранить хранилище
+        if: always() && steps.chk.outputs.ok == '1' && steps.sync.outputs.changed == 'true'
+        run: scripts/store.sh push my-matches
+      - name: Опубликовать в ветку stats-data
+        if: always() && steps.chk.outputs.ok == '1' && steps.sync.outputs.ok == 'true'
+        run: scripts/publish-stats-branch.sh store/my-matches/matches stats-data
