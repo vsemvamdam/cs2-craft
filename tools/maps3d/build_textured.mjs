@@ -15,7 +15,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { NodeIO, getBounds } from '@gltf-transform/core';
+import { NodeIO, Logger, getBounds } from '@gltf-transform/core';
 import { ALL_EXTENSIONS, EXTMeshoptCompression } from '@gltf-transform/extensions';
 import { dedup, prune, weld, join, simplify, quantize, textureCompress, transformMesh } from '@gltf-transform/functions';
 import { MeshoptEncoder, MeshoptSimplifier } from 'meshoptimizer';
@@ -74,7 +74,9 @@ console.log(`tool primitives dropped: ${dropped}; colour textures: ${usedImg.siz
 await MeshoptEncoder.ready;
 await MeshoptSimplifier.ready;
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.encoder': MeshoptEncoder });
+io.setLogger(new Logger(Logger.Verbosity.ERROR)); // no per-accessor warnings
 const doc = await io.read(tmp);
+doc.setLogger(new Logger(Logger.Verbosity.ERROR));
 fs.rmSync(tmp);
 const root = doc.getRoot();
 for (const s of root.listSkins()) s.dispose();
