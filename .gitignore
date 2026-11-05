@@ -7,3 +7,4 @@ public/data/h/
 .DS_Store
 tests/.tradeup.bundle.mjs
 tests/.inspect.bundle.mjs
+__pycache__/
