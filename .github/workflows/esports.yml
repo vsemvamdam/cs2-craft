@@ -27,3 +27,13 @@ jobs:
           name: probe
           path: probe
           retention-days: 2
+      - name: Сохранить зонд в ветку
+        run: |
+          cd probe
+          git init -q -b esports-probe
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -c core.autocrlf=false add -A
+          git commit -q -m probe
+          git config http.https://github.com/.extraheader "$(git -C .. config http.https://github.com/.extraheader)"
+          git push -q -f https://github.com/${{ github.repository }}.git esports-probe
