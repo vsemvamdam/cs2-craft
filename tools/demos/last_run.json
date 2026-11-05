@@ -1,204 +1,204 @@
 {
- "started": "2026-11-05T03:31:38Z",
+ "started": "2026-11-05T03:51:10Z",
  "repo": "blanchon/opencs2_dataset_demo",
  "errors": [],
  "done": [
   {
-   "path": "demos/shard-europe-17bc5760/2393229/b8-vs-passion-ua-m2-mirage.dem",
+   "path": "demos/shard-europe-1574a6a2/2393088/legacy-vs-mouz-m3-mirage.dem",
    "map": "mirage",
    "event": "IEM Rio 2026",
-   "match": "B8 vs Passion UA",
-   "date": "2026-04-14",
-   "log": [
-    "  карта de_mirage: 244 бросков {'smoke': 79, 'molotov': 66, 'he': 37, 'flash': 62}",
-    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_mirage.json (всего 558, добавлено/обновлено 244)"
-   ]
-  },
-  {
-   "path": "demos/shard-europe-17bc5760/2393228/natus-vincere-vs-furia-m1-mirage.dem",
-   "map": "mirage",
-   "event": "IEM Rio 2026",
-   "match": "Natus Vincere vs FURIA",
-   "date": "2026-04-14",
-   "log": [
-    "  карта de_mirage: 312 бросков {'smoke': 105, 'flash': 87, 'molotov': 71, 'decoy': 1, 'he': 48}",
-    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_mirage.json (всего 870, добавлено/обновлено 312)"
-   ]
-  },
-  {
-   "path": "demos/shard-europe-17bc5760/2393226/spirit-vs-falcons-m2-mirage.dem",
-   "map": "mirage",
-   "event": "IEM Rio 2026",
-   "match": "Spirit vs Falcons",
-   "date": "2026-04-14",
-   "log": [
-    "  карта de_mirage: 377 бросков {'smoke': 122, 'molotov': 86, 'flash': 107, 'decoy': 1, 'he': 61}",
-    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_mirage.json (всего 1247, добавлено/обновлено 377)"
-   ]
-  },
-  {
-   "path": "demos/shard-europe-17bc5760/2393224/vitality-vs-g2-m2-inferno.dem",
-   "map": "inferno",
-   "event": "IEM Rio 2026",
-   "match": "Vitality vs G2",
-   "date": "2026-04-14",
-   "log": [
-    "  карта de_inferno: 698 бросков {'smoke': 191, 'he': 129, 'flash': 202, 'molotov': 176}",
-    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_inferno.json (всего 1284, добавлено/обновлено 698)"
-   ]
-  },
-  {
-   "path": "demos/shard-europe-10892ed9/2393082/gentle-mates-vs-g2-m1-inferno.dem",
-   "map": "inferno",
-   "event": "IEM Rio 2026",
-   "match": "Gentle Mates vs G2",
+   "match": "Legacy vs MOUZ",
    "date": "2026-04-13",
    "log": [
-    "  карта de_inferno: 522 бросков {'smoke': 142, 'molotov': 124, 'flash': 155, 'he': 101}",
-    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_inferno.json (всего 1806, добавлено/обновлено 522)"
+    "  карта de_mirage: 356 бросков {'smoke': 112, 'molotov': 92, 'flash': 90, 'he': 62}",
+    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_mirage.json (всего 1603, добавлено/обновлено 356)"
    ]
   },
   {
-   "path": "demos/shard-europe-1574a6a2/2393085/furia-vs-passion-ua-m1-inferno.dem",
-   "map": "inferno",
+   "path": "demos/shard-europe-1574a6a2/2393087/aurora-vs-hotu-m1-mirage.dem",
+   "map": "mirage",
+   "event": "IEM Rio 2026",
+   "match": "Aurora vs HOTU",
+   "date": "2026-04-13",
+   "log": [
+    "  карта de_mirage: 331 бросков {'smoke': 108, 'molotov': 88, 'flash': 81, 'he': 54}",
+    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_mirage.json (всего 1934, добавлено/обновлено 331)"
+   ]
+  },
+  {
+   "path": "demos/shard-europe-1574a6a2/2393085/furia-vs-passion-ua-m2-mirage.dem",
+   "map": "mirage",
    "event": "IEM Rio 2026",
    "match": "FURIA vs Passion UA",
    "date": "2026-04-13",
    "log": [
-    "  карта de_inferno: 363 бросков {'he': 74, 'flash': 103, 'smoke': 102, 'decoy': 2, 'molotov': 82}",
-    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_inferno.json (всего 2169, добавлено/обновлено 363)"
+    "  карта de_mirage: 391 бросков {'he': 56, 'flash': 124, 'smoke': 128, 'molotov': 82, 'decoy': 1}",
+    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_mirage.json (всего 2325, добавлено/обновлено 391)"
    ]
   },
   {
-   "path": "demos/shard-europe-17bc5760/2393228/natus-vincere-vs-furia-m3-nuke.dem",
-   "map": "nuke",
+   "path": "demos/shard-europe-1574a6a2/2393088/legacy-vs-mouz-m2-inferno.dem",
+   "map": "inferno",
    "event": "IEM Rio 2026",
-   "match": "Natus Vincere vs FURIA",
-   "date": "2026-04-14",
-   "log": [
-    "  карта de_nuke: 728 бросков {'molotov': 184, 'flash': 176, 'smoke': 230, 'he': 136, 'decoy': 2}",
-    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_nuke.json (всего 728, добавлено/обновлено 728)"
-   ]
-  },
-  {
-   "path": "demos/shard-europe-10892ed9/2392152/ex-ruby-vs-metizport-m2-nuke.dem",
-   "map": "nuke",
-   "event": "European Pro League Series 6",
-   "match": "ex-RUBY vs Metizport",
+   "match": "Legacy vs MOUZ",
    "date": "2026-04-13",
    "log": [
-    "  карта de_nuke: 474 бросков {'smoke': 155, 'molotov': 121, 'flash': 105, 'he': 93}",
-    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_nuke.json (всего 1202, добавлено/обновлено 474)"
+    "  карта de_inferno: 516 бросков {'smoke': 140, 'he': 113, 'flash': 141, 'molotov': 121, 'decoy': 1}",
+    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_inferno.json (всего 2685, добавлено/обновлено 516)"
    ]
   },
   {
-   "path": "demos/shard-europe-10892ed9/2393081/vitality-vs-red-canids-m1-nuke.dem",
-   "map": "nuke",
-   "event": "IEM Rio 2026",
-   "match": "Vitality vs RED Canids",
-   "date": "2026-04-13",
-   "log": [
-    "  карта de_nuke: 343 бросков {'smoke': 111, 'flash': 65, 'molotov': 93, 'he': 74}",
-    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_nuke.json (всего 1545, добавлено/обновлено 343)"
-   ]
-  },
-  {
-   "path": "demos/shard-europe-17bc5760/2393227/liquid-vs-3dmax-m2-ancient.dem",
-   "map": "ancient",
-   "event": "IEM Rio 2026",
-   "match": "Liquid vs 3DMAX",
-   "date": "2026-04-14",
-   "log": [
-    "  карта de_ancient: 404 бросков {'flash': 122, 'molotov': 93, 'smoke': 115, 'he': 73, 'decoy': 1}",
-    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_ancient.json (всего 404, добавлено/обновлено 404)"
-   ]
-  },
-  {
-   "path": "demos/shard-europe-10892ed9/2392152/ex-ruby-vs-metizport-m3-ancient.dem",
-   "map": "ancient",
-   "event": "European Pro League Series 6",
-   "match": "ex-RUBY vs Metizport",
-   "date": "2026-04-13",
-   "log": [
-    "  карта de_ancient: 444 бросков {'smoke': 131, 'flash': 122, 'molotov': 111, 'he': 80}",
-    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_ancient.json (всего 848, добавлено/обновлено 444)"
-   ]
-  },
-  {
-   "path": "demos/shard-europe-1574a6a2/2393084/3dmax-vs-falcons-m2-ancient.dem",
-   "map": "ancient",
+   "path": "demos/shard-europe-1574a6a2/2393084/3dmax-vs-falcons-m1-inferno.dem",
+   "map": "inferno",
    "event": "IEM Rio 2026",
    "match": "3DMAX vs Falcons",
    "date": "2026-04-13",
    "log": [
-    "  карта de_ancient: 354 бросков {'smoke': 95, 'decoy': 2, 'flash': 107, 'he': 70, 'molotov': 80}",
-    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_ancient.json (всего 1202, добавлено/обновлено 354)"
+    "  карта de_inferno: 586 бросков {'smoke': 166, 'flash': 164, 'he': 118, 'molotov': 138}",
+    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_inferno.json (всего 3271, добавлено/обновлено 586)"
    ]
   },
   {
-   "path": "demos/shard-europe-17bc5760/2393226/spirit-vs-falcons-m1-anubis.dem",
-   "map": "anubis",
+   "path": "demos/shard-europe-1574a6a2/2393086/b8-vs-natus-vincere-m2-inferno.dem",
+   "map": "inferno",
    "event": "IEM Rio 2026",
-   "match": "Spirit vs Falcons",
-   "date": "2026-04-14",
+   "match": "B8 vs Natus Vincere",
+   "date": "2026-04-13",
    "log": [
-    "  карта de_anubis: 342 бросков {'decoy': 1, 'flash': 82, 'smoke': 113, 'molotov': 80, 'he': 66}",
-    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_anubis.json (всего 342, добавлено/обновлено 342)"
+    "  карта de_inferno: 378 бросков {'smoke': 112, 'decoy': 1, 'flash': 90, 'molotov': 100, 'he': 75}",
+    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_inferno.json (всего 3649, добавлено/обновлено 378)"
    ]
   },
   {
-   "path": "demos/shard-europe-1658a764/2393014/bc-game-vs-mibr-m3-anubis.dem",
-   "map": "anubis",
+   "path": "demos/shard-europe-03d8d6ae/2392303/fake-do-biru-vs-9z-m2-nuke.dem",
+   "map": "nuke",
+   "event": "PGL Astana 2026 South America Closed Qualifier",
+   "match": "Fake do Biru vs 9z",
+   "date": "2026-04-02",
+   "log": [
+    "  карта de_nuke: 284 бросков {'smoke': 88, 'molotov': 78, 'he': 54, 'flash': 64}",
+    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_nuke.json (всего 1829, добавлено/обновлено 284)"
+   ]
+  },
+  {
+   "path": "demos/shard-europe-0436c5b3/2392444/nemesis-vs-heroic-m1-nuke.dem",
+   "map": "nuke",
+   "event": "Stake Ranked Episode 1",
+   "match": "Nemesis vs HEROIC",
+   "date": "2026-04-02",
+   "log": [
+    "  карта de_nuke: 329 бросков {'he': 70, 'smoke': 111, 'molotov': 91, 'flash': 57}",
+    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_nuke.json (всего 2158, добавлено/обновлено 329)"
+   ]
+  },
+  {
+   "path": "demos/shard-europe-11bffb5d/2392306/oddik-vs-9z-m2-nuke.dem",
+   "map": "nuke",
+   "event": "PGL Astana 2026 South America Closed Qualifier",
+   "match": "ODDIK vs 9z",
+   "date": "2026-04-02",
+   "log": [
+    "  карта de_nuke: 599 бросков {'smoke': 184, 'flash': 116, 'molotov': 158, 'he': 141}",
+    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_nuke.json (всего 2757, добавлено/обновлено 599)"
+   ]
+  },
+  {
+   "path": "demos/shard-europe-1574a6a2/2393086/b8-vs-natus-vincere-m1-ancient.dem",
+   "map": "ancient",
+   "event": "IEM Rio 2026",
+   "match": "B8 vs Natus Vincere",
+   "date": "2026-04-13",
+   "log": [
+    "  карта de_ancient: 279 бросков {'smoke': 82, 'flash': 76, 'molotov': 62, 'he': 58, 'decoy': 1}",
+    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_ancient.json (всего 1481, добавлено/обновлено 279)"
+   ]
+  },
+  {
+   "path": "demos/shard-europe-1658a764/2393014/bc-game-vs-mibr-m1-ancient.dem",
+   "map": "ancient",
    "event": "PGL Bucharest 2026",
    "match": "BC.Game vs MIBR",
    "date": "2026-04-05",
    "log": [
-    "  карта de_anubis: 490 бросков {'smoke': 136, 'molotov': 127, 'flash': 146, 'he': 81}",
-    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_anubis.json (всего 832, добавлено/обновлено 490)"
+    "  карта de_ancient: 613 бросков {'molotov': 161, 'smoke': 175, 'decoy': 1, 'flash': 178, 'he': 98}",
+    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_ancient.json (всего 2094, добавлено/обновлено 613)"
    ]
   },
   {
-   "path": "demos/shard-europe-10892ed9/2393338/chicanery-vs-mouse-m2-anubis.dem",
+   "path": "demos/shard-europe-020c2c03/2393396/tnc-vs-phantom-academy-m2-ancient.dem",
+   "map": "ancient",
+   "event": "Parken Challenger Championship Season 5",
+   "match": "TNC vs Phantom Academy",
+   "date": "2026-04-19",
+   "log": [
+    "  карта de_ancient: 665 бросков {'smoke': 186, 'flash': 171, 'molotov': 171, 'he': 137}",
+    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_ancient.json (всего 2759, добавлено/обновлено 665)"
+   ]
+  },
+  {
+   "path": "demos/shard-europe-1574a6a2/2393131/marsborne-vs-aether-m1-anubis.dem",
    "map": "anubis",
-   "event": "Dust2.us Eagle Masters Series 7",
-   "match": "Chicanery vs mouse",
+   "event": "CCT Season 3 North America Series 4",
+   "match": "Marsborne vs Aether",
    "date": "2026-04-13",
    "log": [
-    "  карта de_anubis: 440 бросков {'smoke': 130, 'flash': 107, 'molotov': 118, 'he': 85}",
-    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_anubis.json (всего 1272, добавлено/обновлено 440)"
+    "  карта de_anubis: 480 бросков {'smoke': 142, 'flash': 129, 'molotov': 124, 'he': 84, 'decoy': 1}",
+    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_anubis.json (всего 1752, добавлено/обновлено 480)"
    ]
   },
   {
-   "path": "demos/shard-europe-17bc5760/2393228/natus-vincere-vs-furia-m2-dust2.dem",
+   "path": "demos/shard-europe-0d8132f5/2393277/saw-vs-sashi-academy-m2-anubis.dem",
+   "map": "anubis",
+   "event": "Parken Challenger Championship Season 4",
+   "match": "SAW vs Sashi Academy",
+   "date": "2026-04-11",
+   "log": [
+    "  карта de_anubis: 321 бросков {'smoke': 101, 'flash': 87, 'molotov': 72, 'he': 60, 'decoy': 1}",
+    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_anubis.json (всего 2073, добавлено/обновлено 321)"
+   ]
+  },
+  {
+   "path": "demos/shard-europe-201e9876/2393055/pivosquad-vs-re-de-m2-anubis.dem",
+   "map": "anubis",
+   "event": "HLC Belgrade PRO 2026",
+   "match": "PIVOSQUAD vs Re Di",
+   "date": "2026-04-04",
+   "log": [
+    "  карта de_anubis: 338 бросков {'flash': 76, 'he': 74, 'molotov': 76, 'smoke': 112}",
+    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_anubis.json (всего 2411, добавлено/обновлено 338)"
+   ]
+  },
+  {
+   "path": "demos/shard-europe-1574a6a2/2393088/legacy-vs-mouz-m1-dust2.dem",
    "map": "dust2",
    "event": "IEM Rio 2026",
-   "match": "Natus Vincere vs FURIA",
-   "date": "2026-04-14",
-   "log": [
-    "  карта de_dust2: 371 бросков {'smoke': 111, 'molotov': 78, 'flash': 137, 'he': 45}",
-    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_dust2.json (всего 371, добавлено/обновлено 371)"
-   ]
-  },
-  {
-   "path": "demos/shard-europe-17bc5760/2393231/legacy-vs-hotu-m1-dust2.dem",
-   "map": "dust2",
-   "event": "IEM Rio 2026",
-   "match": "Legacy vs HOTU",
-   "date": "2026-04-14",
-   "log": [
-    "  карта de_dust2: 402 бросков {'smoke': 114, 'molotov': 95, 'flash': 124, 'he': 69}",
-    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_dust2.json (всего 773, добавлено/обновлено 402)"
-   ]
-  },
-  {
-   "path": "demos/shard-europe-10892ed9/2392151/phantom-vs-heroic-academy-m2-dust2.dem",
-   "map": "dust2",
-   "event": "European Pro League Series 6",
-   "match": "Phantom vs HEROIC Academy",
+   "match": "Legacy vs MOUZ",
    "date": "2026-04-13",
    "log": [
-    "  карта de_dust2: 339 бросков {'smoke': 95, 'flash': 113, 'molotov': 76, 'he': 55}",
-    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_dust2.json (всего 1112, добавлено/обновлено 339)"
+    "  карта de_dust2: 443 бросков {'smoke': 128, 'flash': 152, 'molotov': 90, 'he': 73}",
+    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_dust2.json (всего 1555, добавлено/обновлено 443)"
+   ]
+  },
+  {
+   "path": "demos/shard-europe-1574a6a2/2393087/aurora-vs-hotu-m2-dust2.dem",
+   "map": "dust2",
+   "event": "IEM Rio 2026",
+   "match": "Aurora vs HOTU",
+   "date": "2026-04-13",
+   "log": [
+    "  карта de_dust2: 693 бросков {'smoke': 206, 'flash': 231, 'molotov': 165, 'he': 90, 'decoy': 1}",
+    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_dust2.json (всего 2248, добавлено/обновлено 693)"
+   ]
+  },
+  {
+   "path": "demos/shard-europe-1574a6a2/2393083/spirit-vs-liquid-m2-dust2.dem",
+   "map": "dust2",
+   "event": "IEM Rio 2026",
+   "match": "Spirit vs Liquid",
+   "date": "2026-04-13",
+   "log": [
+    "  карта de_dust2: 551 бросков {'decoy': 2, 'flash': 199, 'smoke': 154, 'molotov': 110, 'he': 86}",
+    "  → /home/runner/work/cs2-craft/cs2-craft/public/data/nades/de_dust2.json (всего 2799, добавлено/обновлено 551)"
    ]
   }
  ],
@@ -245,36 +245,29 @@
  "event_col": "event",
  "date_col": "match_date",
  "top_events": [
-  "European Pro League Series 6",
-  "European Pro League Series 6 Closed Qualifier",
   "IEM Rio 2026",
-  "PGL Astana 2026 Europe Closed Qualifier",
-  "PGL Astana 2026 North America Closed Qualifier",
-  "PGL Astana 2026 North America Open Qualifier 2",
-  "PGL Astana 2026 South America Closed Qualifier",
-  "PGL Astana 2026 South America Open Qualifier 2",
   "PGL Bucharest 2026"
  ],
- "candidates": 243,
+ "candidates": 225,
  "picked": [
-  "demos/shard-europe-17bc5760/2393229/b8-vs-passion-ua-m2-mirage.dem",
-  "demos/shard-europe-17bc5760/2393228/natus-vincere-vs-furia-m1-mirage.dem",
-  "demos/shard-europe-17bc5760/2393226/spirit-vs-falcons-m2-mirage.dem",
-  "demos/shard-europe-17bc5760/2393224/vitality-vs-g2-m2-inferno.dem",
-  "demos/shard-europe-10892ed9/2393082/gentle-mates-vs-g2-m1-inferno.dem",
-  "demos/shard-europe-1574a6a2/2393085/furia-vs-passion-ua-m1-inferno.dem",
-  "demos/shard-europe-17bc5760/2393228/natus-vincere-vs-furia-m3-nuke.dem",
-  "demos/shard-europe-10892ed9/2392152/ex-ruby-vs-metizport-m2-nuke.dem",
-  "demos/shard-europe-10892ed9/2393081/vitality-vs-red-canids-m1-nuke.dem",
-  "demos/shard-europe-17bc5760/2393227/liquid-vs-3dmax-m2-ancient.dem",
-  "demos/shard-europe-10892ed9/2392152/ex-ruby-vs-metizport-m3-ancient.dem",
-  "demos/shard-europe-1574a6a2/2393084/3dmax-vs-falcons-m2-ancient.dem",
-  "demos/shard-europe-17bc5760/2393226/spirit-vs-falcons-m1-anubis.dem",
-  "demos/shard-europe-1658a764/2393014/bc-game-vs-mibr-m3-anubis.dem",
-  "demos/shard-europe-10892ed9/2393338/chicanery-vs-mouse-m2-anubis.dem",
-  "demos/shard-europe-17bc5760/2393228/natus-vincere-vs-furia-m2-dust2.dem",
-  "demos/shard-europe-17bc5760/2393231/legacy-vs-hotu-m1-dust2.dem",
-  "demos/shard-europe-10892ed9/2392151/phantom-vs-heroic-academy-m2-dust2.dem"
+  "demos/shard-europe-1574a6a2/2393088/legacy-vs-mouz-m3-mirage.dem",
+  "demos/shard-europe-1574a6a2/2393087/aurora-vs-hotu-m1-mirage.dem",
+  "demos/shard-europe-1574a6a2/2393085/furia-vs-passion-ua-m2-mirage.dem",
+  "demos/shard-europe-1574a6a2/2393088/legacy-vs-mouz-m2-inferno.dem",
+  "demos/shard-europe-1574a6a2/2393084/3dmax-vs-falcons-m1-inferno.dem",
+  "demos/shard-europe-1574a6a2/2393086/b8-vs-natus-vincere-m2-inferno.dem",
+  "demos/shard-europe-03d8d6ae/2392303/fake-do-biru-vs-9z-m2-nuke.dem",
+  "demos/shard-europe-0436c5b3/2392444/nemesis-vs-heroic-m1-nuke.dem",
+  "demos/shard-europe-11bffb5d/2392306/oddik-vs-9z-m2-nuke.dem",
+  "demos/shard-europe-1574a6a2/2393086/b8-vs-natus-vincere-m1-ancient.dem",
+  "demos/shard-europe-1658a764/2393014/bc-game-vs-mibr-m1-ancient.dem",
+  "demos/shard-europe-020c2c03/2393396/tnc-vs-phantom-academy-m2-ancient.dem",
+  "demos/shard-europe-1574a6a2/2393131/marsborne-vs-aether-m1-anubis.dem",
+  "demos/shard-europe-0d8132f5/2393277/saw-vs-sashi-academy-m2-anubis.dem",
+  "demos/shard-europe-201e9876/2393055/pivosquad-vs-re-de-m2-anubis.dem",
+  "demos/shard-europe-1574a6a2/2393088/legacy-vs-mouz-m1-dust2.dem",
+  "demos/shard-europe-1574a6a2/2393087/aurora-vs-hotu-m2-dust2.dem",
+  "demos/shard-europe-1574a6a2/2393083/spirit-vs-liquid-m2-dust2.dem"
  ],
- "finished": "2026-11-05T03:49:16Z"
+ "finished": "2026-11-05T03:57:06Z"
 }
