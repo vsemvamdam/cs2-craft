@@ -1,0 +1,6 @@
+# Ссылки на турнирные демки (.dem / .rar / .zip / .gz), по одной на строку.
+# После "|" можно указать метаданные в JSON: турнир, матч, дату, страницу матча и VOD.
+# HLTV блокирует автоматическую загрузку — надёжнее скачать архив вручную,
+# загрузить его в Release этого репозитория и вписать сюда прямую ссылку на файл.
+#
+# https://github.com/vsemvamdam/cs2-craft/releases/download/demos/vitality-vs-spirit-m1.rar | {"event":"IEM Cologne 2026","match":"Vitality vs Spirit","date":"2026-08-10","url":"https://www.hltv.org/matches/...","vod":"https://www.youtube.com/watch?v=..."}

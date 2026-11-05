@@ -226,7 +226,8 @@ def extract_demo(dem: Path, meta: dict, include_warmup=False, players=None, keep
         for name, df in parser.parse_events(names):
             for _, e in df.iterrows():
                 det.setdefault((str(e.get("user_steamid")), DETONATE_EVENTS[name]), []).append(
-                    (int(e["tick"]), fnum(e.get("x")), fnum(e.get("y")), fnum(e.get("z"))))
+                    (int(e["tick"]), fnum(e.get("x")), fnum(e.get("y")), fnum(e.get("z")),
+                     int(fnum(e.get("entityid"), -1))))
         for v in det.values():
             v.sort()
 
@@ -291,12 +292,14 @@ def extract_demo(dem: Path, meta: dict, include_warmup=False, players=None, keep
         end_tick = None
         if seg is not None:
             end_tick = seg["t1"]
-            # detonation event of that owner/type within projectile lifetime (+ small slack)
-            for (dtick, dx, dy, dz) in det.get((sid, gtype), []):
-                if seg["t0"] <= dtick <= seg["t1"] + 4:
-                    land = (dx, dy, dz)
-                    end_tick = dtick
-                    break
+            # detonation event of that owner/type within projectile lifetime (+ small slack);
+            # prefer the one carrying the projectile's entity id (smoke/flash/he/decoy),
+            # molotov's inferno is a separate entity → first one in the window.
+            window = [d for d in det.get((sid, gtype), []) if seg["t0"] <= d[0] <= seg["t1"] + 4]
+            pick = next((d for d in window if d[4] == seg["eid"]), window[0] if window else None)
+            if pick is not None:
+                land = pick[1:4]
+                end_tick = pick[0]
             if land is None:
                 if gtype == "smoke" or gtype == "decoy":
                     # projectile stays in world after landing → take first point it stops moving
@@ -311,7 +314,7 @@ def extract_demo(dem: Path, meta: dict, include_warmup=False, players=None, keep
                 else:
                     land = tuple(seg["xyz"][-1])
         else:
-            for (dtick, dx, dy, dz) in det.get((sid, gtype), []):
+            for (dtick, dx, dy, dz, _eid) in det.get((sid, gtype), []):
                 if tick <= dtick <= tick + 64 * 25:
                     land = (dx, dy, dz)
                     end_tick = dtick
@@ -496,6 +499,10 @@ def unpack(path: Path, dest: Path, depth=0) -> list[Path]:
                 if m.is_dir() or not safe_member(m.filename):
                     continue
                 target = sub / Path(m.filename).name
+                k = 1
+                while target.exists():  # same basename in different folders
+                    target = sub / f"{Path(m.filename).stem}_{k}{Path(m.filename).suffix}"
+                    k += 1
                 with z.open(m) as src, open(target, "wb") as dst:
                     shutil.copyfileobj(src, dst, length=1 << 20)
     elif kind in ("gz", "bz2", "xz"):
