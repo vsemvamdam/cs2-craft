@@ -24,7 +24,7 @@ export function csSports(sports) {
     const name = String(s.sport || s.slug || s.label || '');
     if (!/^(cs2|csgo|cs|counter-?strike.*)$/i.test(name) && !isCS(name)) continue;
     for (const id of String(s.series ?? '').split(',').map((x) => x.trim()).filter(Boolean)) series.add(id);
-    for (const id of String(s.tags ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (id !== '1' && id !== '100639') tags.add(id);
+    for (const id of String(s.tags ?? '').split(',').map((x) => x.trim()).filter(Boolean)) tags.add(id);
   }
   return { series: [...series], tags: [...tags] };
 }
@@ -40,7 +40,8 @@ export function parseEvents(events, now = Date.now() / 1000) {
     const tagText = (e.tags || []).map((t) => t.slug + ' ' + t.label).join(' ');
     if (!isCS(title) && !isCS(tagText) && !isCS(e.slug) && !/^cs2-/.test(e.slug || '')) continue;
     if (e.closed || e.ended || e.archived) continue;
-    const markets = (e.markets || []).filter((m) => !m.closed && m.active !== false);
+    // thin markets (no money behind the price) say nothing
+    const markets = (e.markets || []).filter((m) => !m.closed && m.active !== false && (+m.liquidity >= 20 || +m.volume >= 100));
     // match winner: explicit moneyline, else a 2-outcome market whose outcomes are not Yes/No and whose question has "vs"
     let mk = markets.find((m) => m.sportsMarketType === 'moneyline');
     if (!mk) {
@@ -72,37 +73,33 @@ export function parseEvents(events, now = Date.now() / 1000) {
   return out;
 }
 
-/** fetches open CS2 events: discovery through /sports, then events by series/tag, with fallbacks */
-export async function fetchPolymarket(get, log = console.log) {
-  const events = [];
+/** fetches open CS2 match events: series from /sports (CS2 = 10310 at the time of writing), then keyset pages */
+export async function fetchPolymarket(get, { now = Date.now(), log = console.log } = {}) {
   let sports = null;
   try { sports = await get('pm-sports', PM + '/sports'); } catch (e) { log('polymarket /sports:', e.message); }
-  const { series, tags } = csSports(sports);
-  log(`polymarket: series=${series.join(',') || '—'} tags=${tags.join(',') || '—'}`);
-  const tryList = async (name, url) => {
-    try {
-      const j = await get(name, url);
-      const arr = Array.isArray(j) ? j : j?.events || j?.data || [];
-      events.push(...arr);
-      return arr.length;
-    } catch (e) {
-      log(`polymarket ${name}:`, e.message);
-      return 0;
-    }
-  };
-  for (const s of series.slice(0, 3)) {
+  const found = csSports(sports);
+  const series = found.series.length ? found.series : ['10310'];
+  const iso = (ms) => new Date(ms).toISOString();
+  const events = [];
+  for (const s of series.slice(0, 2)) {
     let cursor = '';
-    for (let page = 0; page < 3; page++) {
-      const url = `${PM}/events/keyset?series_id=${s}&closed=false&limit=100` + (cursor ? `&after_cursor=${encodeURIComponent(cursor)}` : '');
+    for (let page = 0; page < 5; page++) {
+      const q = new URLSearchParams({ series_id: s, closed: 'false', limit: '100', start_time_min: iso(now - 12 * 3600e3), start_time_max: iso(now + 14 * 86400e3) });
+      if (cursor) q.set('after_cursor', cursor);
       let j;
-      try { j = await get(`pm-series-${s}-${page}`, url); } catch (e) { log('polymarket series', s, e.message); break; }
-      const arr = Array.isArray(j) ? j : j?.events || j?.data || [];
+      try { j = await get(`pm-series-${s}-${page}`, `${PM}/events/keyset?${q}`); } catch (e) { log('polymarket series', s, e.message); break; }
+      const arr = Array.isArray(j) ? j : j?.events || [];
       events.push(...arr);
-      cursor = j?.next_cursor || j?.nextCursor || '';
+      cursor = j?.next_cursor || '';
       if (!cursor || arr.length < 100) break;
     }
   }
-  if (!events.length) for (const t of tags.slice(0, 2)) await tryList(`pm-tag-${t}`, `${PM}/events?tag_id=${t}&closed=false&limit=200`);
-  if (!events.length) for (const slug of ['counter-strike-2', 'cs2', 'counter-strike']) if (await tryList(`pm-tagslug-${slug}`, `${PM}/events?tag_slug=${slug}&closed=false&limit=200`)) break;
-  return parseEvents(events);
+  if (!events.length) {
+    // fallback: tag listing (includes long-running futures, filtered by the parser)
+    try {
+      const j = await get('pm-tag', `${PM}/events?tag_slug=counter-strike-2&closed=false&limit=200&end_date_min=${iso(now - 12 * 3600e3)}`);
+      events.push(...(Array.isArray(j) ? j : j?.events || []));
+    } catch (e) { log('polymarket tag:', e.message); }
+  }
+  return parseEvents(events, now / 1000);
 }
