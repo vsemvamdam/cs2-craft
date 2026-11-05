@@ -1,0 +1,58 @@
+name: Астро-проверка матчей
+
+# Длинная история про-матчей CS (S- и A-тир, Liquipedia, CC BY-SA 3.0) и даты рождения игроков →
+# хранилище matches-hist (релиз data-store) → статистическая проверка астрологии (tools/astro/matches_astro.py)
+# → результаты и графики в архиве astro-matches. Загрузка возобновляемая: уже скачанные завершённые
+# турниры и найденные игроки повторно не запрашиваются. Один job, только action=query (≥2 с между запросами).
+on:
+  workflow_dispatch:
+  push:
+    branches: [astro-matches]
+    paths:
+      - '.github/workflows/astro-matches.yml'
+      - 'scripts/fetch-matches-hist.mjs'
+      - 'tools/astro/**'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: astro-matches
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HIST_BUDGET_MIN: '280'
+      HIST_LIMIT: '6'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -q numpy pandas scipy ephem matplotlib
+      - name: Хранилище истории матчей
+        run: scripts/store.sh pull matches-hist
+      - name: Турниры и матчи (Liquipedia)
+        run: node scripts/fetch-matches-hist.mjs tournaments --store store/matches-hist --from 2021-05-01 --limit "$HIST_LIMIT"
+      - name: Игроки из демок
+        run: scripts/store.sh pull nades-site
+      - name: Даты рождения игроков (Liquipedia)
+        run: HIST_BUDGET_MIN=30 node scripts/fetch-matches-hist.mjs players --players store/nades-site/players --store store/matches-hist
+      - name: Сохранить историю
+        if: always()
+        run: scripts/store.sh push matches-hist
+      - name: Анализ
+        run: |
+          if [ -f tools/astro/matches_astro.py ]; then
+            python3 tools/astro/matches_astro.py --hist store/matches-hist --players store/nades-site/players --out store/astro-matches
+            scripts/store.sh push astro-matches
+          else
+            echo "анализа ещё нет"
+          fi
