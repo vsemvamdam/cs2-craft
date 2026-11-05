@@ -56,6 +56,10 @@ jobs:
         run: |
           scripts/store.sh pull nades-site
           if [ -d store/nades-site ]; then cp -r store/nades-site/. public/data/; fi
+      - name: Аватары игроков (Steam)
+        env:
+          STEAM_API_KEY: ${{ secrets.STEAM_API_KEY }}
+        run: node scripts/fetch-avatars.mjs || true
       - name: Сборка
         run: npm test && npm run build
       - uses: actions/configure-pages@v5

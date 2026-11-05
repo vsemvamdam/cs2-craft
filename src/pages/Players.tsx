@@ -4,6 +4,31 @@ import { copy, useAsync } from '../lib/hooks';
 import { href, setQuery, useRoute } from '../lib/router';
 import { decodeCode } from '../lib/crosshair';
 import { paintCrosshair } from '../lib/crosshair-draw';
+import { useTeamLogos } from '../lib/teams';
+import '../styles/players.css';
+
+let avatarsP: Promise<Record<string, string>> | null = null;
+function useAvatars() {
+  const [a, setA] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!avatarsP) avatarsP = fetch(import.meta.env.BASE_URL + 'data/players/avatars.json').then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+    avatarsP.then(setA);
+  }, []);
+  return a;
+}
+const HUE = (s: string) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h % 360; };
+/** Steam avatar of the player (if the site has it) or initials */
+function PlayerAvatar({ sid, name, size = 32, avatars }: { sid: string; name: string; size?: number; avatars: Record<string, string> }) {
+  const [bad, setBad] = useState(false);
+  const h = avatars[sid];
+  if (h && !bad) return <img className="pl-ava" src={`https://avatars.steamstatic.com/${h}_${size > 64 ? 'full' : 'medium'}.jpg`} alt="" width={size} height={size} loading="lazy" onError={() => setBad(true)} />;
+  return <span className="pl-ava pl-ini" style={{ width: size, height: size, fontSize: size * 0.38, background: `hsl(${HUE(name)} 35% 32%)` }}>{name.replace(/[^\p{L}\p{N}]/gu, '').slice(0, 2).toUpperCase() || '?'}</span>;
+}
+function TeamLogo({ team, size = 22, logo }: { team: string; size?: number; logo: ReturnType<typeof useTeamLogos> }) {
+  const src = team ? logo(team) : null;
+  if (src) return <img className="pl-team-logo" src={src} alt="" width={size} height={size} loading="lazy" />;
+  return <span className="pl-team-logo pl-ini" style={{ width: size, height: size, fontSize: size * 0.42, background: `hsl(${HUE(team || '?')} 30% 30%)` }}>{(team || '?').replace(/[^\p{L}\p{N}]/gu, '').slice(0, 2).toUpperCase()}</span>;
+}
 
 /** players/index.json and players/<steamid>.json, built from tournament demos by tools/demos/build_lineups.py */
 type Index = { updated: string; cols: string[]; rows: (string | number)[][] };
@@ -51,6 +76,8 @@ function PlayerList() {
   const sort = (query.get('sort') || 'maps') as SortKey;
   const tab = query.get('tab') || 'players';
   const rows = useMemo(() => toRows(ix.data), [ix.data]);
+  const avatars = useAvatars();
+  const logo = useTeamLogos();
   const teams = useMemo(() => {
     const c = new Map<string, Row[]>();
     for (const r of rows) if (r.team) c.set(r.team, [...(c.get(r.team) || []), r]);
@@ -100,12 +127,16 @@ function PlayerList() {
             <div className="feature-grid">
               {teams.filter((t) => !q || t.team.toLowerCase().includes(q.toLowerCase()) || t.players.some((p) => p.name.toLowerCase().includes(q.toLowerCase()))).map((t) => (
                 <div key={t.team} className="card pad stack" style={{ gap: 8 }}>
-                  <div className="row between"><h3>{t.team}</h3><span className="tiny muted">{t.maps} карт</span></div>
-                  <div className="stack" style={{ gap: 4 }}>
+                  <div className="row between" style={{ flexWrap: 'nowrap' }}>
+                    <span className="row" style={{ gap: 10, flexWrap: 'nowrap', minWidth: 0 }}><TeamLogo team={t.team} size={34} logo={logo} /><h3 className="pl-ell">{t.team}</h3></span>
+                    <span className="tiny muted nowrap">{t.maps} карт</span>
+                  </div>
+                  <div className="stack" style={{ gap: 2 }}>
                     {t.players.slice(0, 7).map((p) => (
-                      <a key={p.sid} className="row between small" href={href(`/player/${p.sid}`)}>
-                        <span><b>{p.name}</b></span>
-                        <span className="muted num">K/D {f2(p.k / Math.max(p.d, 1))} · ADR {f1(p.adr)}</span>
+                      <a key={p.sid} className="pl-trow small" href={href(`/player/${p.sid}`)}>
+                        <PlayerAvatar sid={p.sid} name={p.name} size={24} avatars={avatars} />
+                        <b className="pl-ell">{p.name}</b>
+                        <span className="muted num nowrap">K/D {f2(p.k / Math.max(p.d, 1))} · ADR {f1(p.adr)}</span>
                       </a>
                     ))}
                   </div>
@@ -127,8 +158,8 @@ function PlayerList() {
                 <tbody>
                   {list.slice(0, 400).map((r) => (
                     <tr key={r.sid} className="click" onClick={() => { location.hash = `#/player/${r.sid}`; }}>
-                      <td><b>{r.name}</b></td>
-                      <td className="muted small">{r.team}</td>
+                      <td><span className="row" style={{ gap: 10, flexWrap: 'nowrap' }}><PlayerAvatar sid={r.sid} name={r.name} size={32} avatars={avatars} /><b>{r.name}</b></span></td>
+                      <td className="muted small"><span className="row" style={{ gap: 8, flexWrap: 'nowrap' }}>{r.team ? <TeamLogo team={r.team} size={22} logo={logo} /> : null}<span className="nowrap">{r.team}</span></span></td>
                       <td className="r num">{r.maps}</td>
                       <td className="r num">{f2(r.k / Math.max(r.d, 1))}</td>
                       <td className="r num">{f1(r.adr)}</td>
@@ -173,6 +204,8 @@ function PlayerPage({ sid }: { sid: string }) {
   const ix = useIndex();
   const row = useMemo(() => toRows(ix.data).find((r) => r.sid === sid) || null, [ix.data, sid]);
   const [allGames, setAllGames] = useState(false);
+  const avatars = useAvatars();
+  const logo = useTeamLogos();
   if (p.loading || ix.loading) return <Spinner />;
   const d = p.data;
   if (!d || !row) return <div className="notice">Игрок не найден. <a className="link" href="#/players">Все игроки</a></div>;
@@ -192,8 +225,11 @@ function PlayerPage({ sid }: { sid: string }) {
       <div className="small muted"><a className="link" href="#/players">Игроки</a> / {d.name}</div>
       <div className="row between" style={{ alignItems: 'flex-end' }}>
         <div className="stack" style={{ gap: 4 }}>
-          <h1>{d.name}</h1>
-          <div className="muted">{d.team || 'Без команды'}{d.teams.length > 1 ? <span className="small"> · ранее: {d.teams.filter(([t]) => t !== d.team).map(([t]) => t).join(', ')}</span> : null}</div>
+          <div className="row" style={{ gap: 14, flexWrap: 'nowrap' }}>
+            <PlayerAvatar sid={d.sid} name={d.name} size={72} avatars={avatars} />
+            <h1>{d.name}</h1>
+          </div>
+          <div className="muted row" style={{ gap: 8 }}>{d.team ? <TeamLogo team={d.team} size={22} logo={logo} /> : null}{d.team || 'Без команды'}{d.teams.length > 1 ? <span className="small"> · ранее: {d.teams.filter(([t]) => t !== d.team).map(([t]) => t).join(', ')}</span> : null}</div>
           {d.names.length > 1 && <div className="tiny faint">другие ники в демках: {d.names.slice(1).join(', ')}</div>}
         </div>
         <a className="btn small ghost" href={`https://steamcommunity.com/profiles/${d.sid}`} target="_blank" rel="noreferrer">Профиль Steam ↗</a>
@@ -264,7 +300,6 @@ function PlayerPage({ sid }: { sid: string }) {
         </div>
       </div>
       <p className="tiny muted">Статистика посчитана по турнирным демкам из открытого архива (OpenCS2, CC BY 4.0) — это не полная карьерная статистика, а только матчи, попавшие в базу.</p>
-      <style>{`.pl-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}.pl-stat{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:10px;background:var(--surface-2)}.pl-stat b{font-size:22px}@media (max-width:900px){.grid[style*="1.4fr"]{grid-template-columns:1fr !important}}`}</style>
     </div>
   );
 }
