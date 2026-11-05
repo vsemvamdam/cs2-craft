@@ -1,29 +1,12 @@
-name: Раскидки из демок
+name: Раскидки из своих демок
 
-# Разбирает про-демки и обновляет public/data/nades/<карта>.json:
-#  * ссылки из tools/demos/urls.txt (архивы демок, например загруженные в Release);
-#  * открытый датасет OpenCS2 (Hugging Face blanchon/opencs2_dataset_demo, CC BY 4.0): ~2000 карт HLTV, март–апрель 2026;
-#  * по желанию — датасет CounterQuant на Hugging Face (сейчас закрыт: отвечает 401).
+# Демки по ссылкам из tools/demos/urls.txt (например, архивы, загруженные в Release) →
+# база бросков (релиз data-store, архив nades-raw) → библиотека раскидок на сайте.
 on:
   workflow_dispatch:
-    inputs:
-      opencs2:
-        description: 'Взять новые демки из OpenCS2'
-        type: boolean
-        default: true
-      opencs2_per_map:
-        description: 'Сколько демок OpenCS2 на карту'
-        default: '3'
-      hf:
-        description: 'Попробовать датасет CounterQuant (Hugging Face)'
-        type: boolean
-        default: false
-      per_map:
-        description: 'Сколько новых демок на карту (для датасета)'
-        default: '4'
   push:
     branches: [main]
-    paths: ['tools/demos/urls.txt', 'tools/demos/fetch_opencs2.py']
+    paths: ['tools/demos/urls.txt']
 
 permissions:
   contents: write
@@ -34,7 +17,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  extract:
+  ingest:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
@@ -46,27 +29,23 @@ jobs:
           python-version: '3.12'
       - name: Распаковщики архивов
         run: sudo apt-get update -qq && (sudo apt-get install -y -qq unrar || sudo apt-get install -y -qq unar) && sudo apt-get install -y -qq p7zip-full zstd
-      - run: pip install demoparser2 huggingface_hub pandas pyarrow
-      - name: Про-матчи из OpenCS2 (HLTV, март–апрель 2026)
-        if: ${{ github.event_name == 'push' || inputs.opencs2 }}
-        continue-on-error: true
-        run: python3 tools/demos/fetch_opencs2.py --per-map "${{ inputs.opencs2_per_map || '3' }}"
-      - name: Свежие про-матчи (CounterQuant / HLTV)
-        if: ${{ inputs.hf }}
-        continue-on-error: true
-        run: python3 tools/demos/fetch_hf.py --per-map "${{ inputs.per_map || '4' }}"
-      - name: Свои ссылки из urls.txt
-        continue-on-error: true
+      - run: pip install demoparser2
+      - name: База бросков
+        run: scripts/store.sh pull nades-raw
+      - name: Разбор демок из urls.txt
         run: |
           if ! grep -qvE '^\s*(#|$)' tools/demos/urls.txt; then echo "в urls.txt ссылок нет"; exit 0; fi
-          python3 tools/demos/extract_nades.py --from-urls tools/demos/urls.txt
-      - name: Сохранить и пересобрать сайт
+          python3 tools/demos/opencs2.py ingest --from-urls tools/demos/urls.txt
+      - name: Собрать раскидки
+        run: python3 tools/demos/build_lineups.py --seed-from-public
+      - name: Сохранить
         run: |
+          scripts/store.sh push nades-raw
           git config user.name "nades-bot"
           git config user.email "nades-bot@users.noreply.github.com"
-          git add public/data/nades/*.json tools/demos/processed.json tools/demos/last_run.json 2>/dev/null || true
+          git add public/data/nades/
           if git diff --cached --quiet; then echo "нет изменений"; exit 0; fi
-          git commit -m "Раскидки: новые броски из про-демок"
+          git commit -m "Раскидки: обновлена библиотека"
           git pull --rebase -q origin main
           git push
           gh workflow run site.yml -f quick=true
