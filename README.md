@@ -30,8 +30,16 @@
 ### Включить полную историю цен Steam
 
 1. Лучше завести/взять **второй** аккаунт Steam (токен даёт доступ к аккаунту).
-2. Локально: `npm install` → `npm run steam-login` → отсканировать QR-код в мобильном приложении Steam.
-3. Скопировать выведенный токен в **Settings → Secrets and variables → Actions → New repository secret**, имя `STEAM_REFRESH_TOKEN`.
+2. Получить токен на своём компьютере. Windows — в PowerShell (Win+X → «Терминал»), не в окне «Выполнить»:
+   ```powershell
+   winget install OpenJS.NodeJS.LTS        # один раз; потом закройте и снова откройте терминал
+   mkdir $HOME\cs2-login; cd $HOME\cs2-login
+   npm init -y; npm install steam-session qrcode-terminal
+   curl.exe -L -o steam-login.mjs https://raw.githubusercontent.com/vsemvamdam/cs2-craft/main/scripts/steam-login.mjs
+   node steam-login.mjs
+   ```
+   Отсканируйте QR-код в приложении Steam (значок щита → «Сканировать QR-код»), подтвердите вход — в терминале появится токен. (Если репозиторий склонирован — то же самое делает `npm install && npm run steam-login`.)
+3. Скопировать токен в **Settings → Secrets and variables → Actions → New repository secret**, имя `STEAM_REFRESH_TOKEN`. Больше нигде его не храните.
 4. **Actions → «История цен Steam» → Run workflow** (или дождаться расписания).
 
 Токен живёт ~200 дней; когда Steam перестанет его принимать, в логе будет «403» — повторите шаг 2–3.

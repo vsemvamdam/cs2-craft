@@ -1,30 +1,31 @@
 #!/usr/bin/env node
 // One-time helper: log in to Steam by QR code and print a refresh token for the
 // STEAM_REFRESH_TOKEN repository secret (used to download full price history).
+// Self-contained: needs only the `steam-session` and `qrcode-terminal` packages,
+// so it can be run from any folder (see README → «Включить полную историю цен Steam»).
 //
-//   npm install
-//   npm run steam-login
-//
-// Scan the QR code with the Steam Mobile app (Steam Guard → scan QR). The token is valid
-// for ~200 days and gives access to that account, so prefer a secondary account and never
-// commit the token anywhere — only paste it into GitHub → Settings → Secrets → Actions.
+// The token is valid for ~200 days and gives access to that account, so prefer a secondary
+// account and never commit or share it — only paste it into GitHub → Settings → Secrets → Actions.
 
 import { LoginSession, EAuthTokenPlatformType } from 'steam-session';
 import qrcode from 'qrcode-terminal';
 
 const session = new LoginSession(EAuthTokenPlatformType.WebBrowser);
-const start = await session.startWithQR();
-console.log('\nОтсканируйте QR-код в мобильном приложении Steam (Steam Guard → сканировать QR):\n');
-qrcode.generate(start.qrChallengeUrl, { small: true });
-console.log('\nЕсли QR не читается, откройте ссылку на телефоне:', start.qrChallengeUrl, '\n');
+session.loginTimeout = 5 * 60 * 1000; // 5 minutes to scan the code (library default is 30 s)
 
-session.on('remoteInteraction', () => console.log('Подтвердите вход в приложении…'));
-session.on('authenticated', async () => {
-  console.log('\nГотово. Вход выполнен как', session.accountName);
-  console.log('\nSTEAM_REFRESH_TOKEN (скопируйте целиком в секрет репозитория):\n');
+const start = await session.startWithQR();
+console.log('\nОтсканируйте QR-код в мобильном приложении Steam:');
+console.log('Steam → значок щита (Steam Guard) → «Сканировать QR-код». На это есть 5 минут.\n');
+qrcode.generate(start.qrChallengeUrl, { small: true });
+
+session.on('remoteInteraction', () => console.log('Код отсканирован — подтвердите вход в приложении Steam…'));
+session.on('authenticated', () => {
+  console.log(`\nГотово: вход выполнен как ${session.accountName}.`);
+  console.log('\nСкопируйте строку ниже целиком в секрет репозитория STEAM_REFRESH_TOKEN');
+  console.log('(GitHub → Settings → Secrets and variables → Actions → New repository secret):\n');
   console.log(session.refreshToken);
-  console.log('\nGitHub → Settings → Secrets and variables → Actions → New repository secret → STEAM_REFRESH_TOKEN');
+  console.log('\nНикому не пересылайте этот токен — он даёт доступ к аккаунту.');
   process.exit(0);
 });
-session.on('timeout', () => { console.error('Время ожидания истекло, запустите снова.'); process.exit(1); });
-session.on('error', (e) => { console.error('Ошибка:', e.message); process.exit(1); });
+session.on('timeout', () => { console.error('Время ожидания истекло — запустите ещё раз.'); process.exit(1); });
+session.on('error', (e) => { console.error('Ошибка входа:', e.message); process.exit(1); });
