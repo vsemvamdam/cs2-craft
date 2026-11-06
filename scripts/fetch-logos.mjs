@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Logos of every team (not only the Major teams that have Valve stickers) and icons of tournaments.
+// Logos of every team (not only the Major teams that have Valve stickers), icons of tournaments, photos of
+// players and the infoboxes of team pages (location, region, founded, coaches, official links).
 //
 //   node scripts/fetch-logos.mjs [--store store/logos] [--hist store/matches-hist] [--out public/data]
 //
@@ -35,7 +36,7 @@ const arg = (n, d) => { const i = argv.indexOf('--' + n); return i >= 0 ? argv[i
 const STORE = arg('store', 'store/logos');
 const HIST = arg('hist', 'store/matches-hist');
 const OUT = arg('out', 'public/data');
-const MAX_DL = +(process.env.LOGOS_MAX_DOWNLOADS || 400);
+const MAX_DL = +(process.env.LOGOS_MAX_DOWNLOADS || 500);
 const REPO = process.env.GITHUB_REPOSITORY || 'vsemvamdam/cs2-craft';
 const WEEK = 7 * 86400000;
 
@@ -73,7 +74,12 @@ async function main() {
   if (ix?.cols) { const ti = ix.cols.indexOf('team'); for (const r of ix.rows) addTeam(r[ti]); }
   const tours = new Set((esports?.tournaments || []).map((t) => t.id).filter(Boolean));
   for (const m of esports?.matches || []) if (m.tp) tours.add(m.tp);
-  console.log(`логотипы: нужно ${want.size} ключей команд, ${tours.size} турниров`);
+  const firstWanted = want.size;
+  // team pages (tools/teams/build_teams.py): their opponents' logos, icons of their tournaments, their infoboxes
+  const need = read(path.join(OUT, 'teams', 'need.json')) || { teams: [], tours: [], pages: [] };
+  for (const n of need.teams) addTeam(n);
+  for (const p of need.tours) tours.add(p);
+  console.log(`логотипы: нужно ${want.size} ключей команд (${firstWanted} — рейтинг, матчи, игроки), ${tours.size} турниров, инфобоксов команд ${need.pages.length}`);
 
   // ---- team → file from the stored team templates ----
   const tpl = read(path.join(HIST, 'teams.json'))?.ids || {};
@@ -91,6 +97,44 @@ async function main() {
   }
 
   const lp = liquipediaClient({ log: console.log });
+  const clean = (v) => String(v || '').replace(/<ref[\s\S]*?(<\/ref>|\/>)/gi, '').replace(/<[^>]+>/g, '').replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, '$1')
+    .replace(/\{\{[^{}]*\}\}/g, '').replace(/'''?/g, '').replace(/&nbsp;/g, ' ').trim();
+  const teamInfo = (ib) => {
+    const f = {};
+    const created = /(\d{4})(?:-(\d\d|\?\?))?(?:-(\d\d|\?\?))?/.exec(ib.created || '');
+    if (created) f.created = [created[1], created[2] && created[2] !== '??' ? created[2] : '', created[3] && created[3] !== '??' ? created[3] : ''].filter(Boolean).join('-');
+    if (ib.disbanded) f.disbanded = clean(ib.disbanded).slice(0, 10);
+    for (const k of ['location', 'region']) if (ib[k]) f[k] = clean(ib[k]);
+    const staff = [];
+    for (const k of ['coach', 'coaches', 'headcoach', 'assistantcoach', 'analyst', 'manager']) {
+      for (const x of clean(ib[k]).split(/\s*(?:<br\s*\/?>|,|\n)\s*/)) if (x && staff.length < 6) staff.push([x, k.includes('assistant') ? 'Ассистент' : k === 'analyst' ? 'Аналитик' : k === 'manager' ? 'Менеджер' : 'Тренер']);
+    }
+    if (staff.length) f.staff = staff;
+    const links = {};
+    for (const k of ['website', 'twitter', 'twitch', 'youtube', 'instagram', 'facebook', 'tiktok', 'vk', 'discord', 'kick', 'weibo', 'bilibili', 'telegram'])
+      if (ib[k] && !/\{\{/.test(ib[k])) links[k] = clean(ib[k]).replace(/\s+/g, '');
+    if (Object.keys(links).length) f.links = links;
+    return f;
+  };
+  idx.pages ||= {};
+  const pagesTodo = need.pages.filter((p) => !(idx.pages[p]?.at > now - 30 * 86400000)).slice(0, 400);
+  for (const part of chunks(pagesTodo, 50)) {
+    let j;
+    try { j = await lp.call({ action: 'query', prop: 'revisions', rvprop: 'content', rvslots: 'main', rvsection: '0', redirects: '1', titles: part.join('|') }, 'lp-team-info'); } catch (e) { console.log('инфобоксы команд:', e.message); break; }
+    const q = j.query || {};
+    const back = new Map();
+    for (const x of [...(q.normalized || []), ...(q.redirects || [])]) back.set(x.to, x.from);
+    for (const p of q.pages || []) {
+      let req = p.title;
+      for (let i = 0; i < 3 && back.has(req); i++) req = back.get(req);
+      const content = p.revisions?.[0]?.slots?.main?.content || '';
+      const ib = /\{\{\s*Infobox[ _]team/i.test(content) ? parseInfobox(content.replace(/Infobox[ _]team/i, 'Infobox league')) : null;
+      idx.pages[req] = { at: now, f: ib ? teamInfo(ib) : {} };
+      const file = ib && [ib.imagedark, ib.imagedarkmode, ib.image].map((x) => (x || '').replace(/^(File|Image):/i, '').trim()).find((x) => x && !DEFAULT.test(x));
+      if (file) for (const k of teamKeys(req)) if (!idx.teams[k]?.file) idx.teams[k] = { file };
+    }
+  }
+
   // ---- teams still without a file: page infobox by title («X», «Team X») ----
   const missing = [...want].filter(([k]) => !idx.teams[k]?.file && !(idx.teams[k]?.miss > now - WEEK));
   const titles = new Map(); // title → keys
@@ -116,8 +160,30 @@ async function main() {
   }
   for (const [k] of missing) if (!idx.teams[k]?.file) idx.teams[k] = { miss: now };
 
-  // ---- tournament → icon file ----
-  const tourTodo = [...tours].filter((p) => !idx.tours[p]?.file && !(idx.tours[p]?.miss > now - WEEK));
+  // ---- tournament → icon file: the stored tournament pages first (no request), then the API ----
+  const rawDir = path.join(HIST, 'raw');
+  if (fs.existsSync(rawDir)) {
+    const wantTour = new Set([...tours].filter((p) => !idx.tours[p]?.file));
+    for (const f of fs.readdirSync(rawDir)) {
+      if (!wantTour.size) break;
+      const j = read(path.join(rawDir, f));
+      const titles = j?.titles || {};
+      for (const [title, c] of Object.entries(titles)) {
+        if (!wantTour.has(title)) continue;
+        // a subpage without its own icon uses the nearest parent's
+        let ib = parseInfobox(c.content || ''), t = title;
+        let file = ib && [ib.icondark, ib.icondarkmode, ib.icon].map((x) => (x || '').replace(/^(File|Image):/i, '').trim()).find((x) => x && !DEFAULT.test(x));
+        while (!file && t.includes('/')) {
+          t = t.slice(0, t.lastIndexOf('/'));
+          const pc = titles[t]?.content;
+          ib = pc ? parseInfobox(pc) : null;
+          file = ib && [ib.icondark, ib.icondarkmode, ib.icon].map((x) => (x || '').replace(/^(File|Image):/i, '').trim()).find((x) => x && !DEFAULT.test(x));
+        }
+        if (file) { idx.tours[title] = { file }; wantTour.delete(title); }
+      }
+    }
+  }
+  const tourTodo = [...tours].filter((p) => !idx.tours[p]?.file && !(idx.tours[p]?.miss > now - WEEK)).slice(0, 400);
   for (const part of chunks(tourTodo, 40)) {
     let j;
     try { j = await lp.call({ action: 'query', prop: 'revisions', rvprop: 'content', rvslots: 'main', rvsection: '0', redirects: '1', titles: part.join('|') }, 'lp-tour-icons'); } catch (e) { console.log('турниры:', e.message); break; }
@@ -134,26 +200,54 @@ async function main() {
   }
   for (const p of tourTodo) if (!idx.tours[p]) idx.tours[p] = { miss: now };
 
-  // ---- file → thumbnail URL (only files we need and don't have yet) ----
-  const needFiles = new Set();
-  for (const [k] of want) { const f = idx.teams[k]?.file; if (f) needFiles.add(f); }
-  for (const p of tours) { const f = idx.tours[p]?.file; if (f) needFiles.add(f); }
-  const toResolve = [...needFiles].filter((f) => !idx.files[f]?.img && !idx.files[f]?.url && !(idx.files[f]?.miss > now - WEEK));
-  for (const part of chunks(toResolve, 50)) {
-    let j;
-    try { j = await lp.call({ action: 'query', prop: 'imageinfo', iiprop: 'url', iiurlwidth: '64', iiurlheight: '64', titles: part.map((f) => 'File:' + f).join('|') }, 'lp-imageinfo'); } catch (e) { console.log('imageinfo:', e.message); break; }
-    const q = j.query || {};
-    const back = new Map();
-    for (const x of q.normalized || []) back.set(x.to, x.from);
-    for (const p of q.pages || []) {
-      const name = (back.get(p.title) || p.title).replace(/^File:/, '');
-      const ii = p.imageinfo?.[0];
-      idx.files[name] = ii?.thumburl || ii?.url ? { url: ii.thumburl || ii.url } : { miss: now };
+  // ---- player photos: «image» of the Liquipedia player infobox (pages stored in matches-hist players.json) ----
+  idx.players ||= {};
+  const links = read(path.join(OUT, 'players', 'links.json'))?.p || {};
+  const extra = read(path.join(HIST, 'players.json'))?.extra || {};
+  const rosterNicks = new Map(); // nick (lower) → world rank of the team
+  for (const t of read(path.join(OUT, 'rankings.json'))?.teams || []) for (const n of t[3]) if (!rosterNicks.has(n.toLowerCase())) rosterNicks.set(n.toLowerCase(), t[0]);
+  const photoRank = [];
+  for (const [sid, e] of Object.entries(links)) {
+    const content = e.lp && extra[e.lp];
+    if (typeof content !== 'string') continue;
+    const m = /^\|\s*image\s*=\s*([^\n|]+)$/m.exec(content.slice(content.indexOf('{{Infobox player')));
+    const file = m && m[1].replace(/^(File|Image):/i, '').trim();
+    if (!file || DEFAULT.test(file) || /\{\{/.test(file)) continue;
+    idx.players[sid] = { file };
+    photoRank.push([rosterNicks.get(String(e.id || '').toLowerCase()) ?? 999, file]);
+  }
+  photoRank.sort((a, b) => a[0] - b[0]);
+
+  // ---- download queue, most visible first ----
+  const queue = [];
+  const push = (f, size) => { if (f && !queue.some((q) => q[0] === f)) queue.push([f, size]); };
+  const wantKeys = [...want.keys()];
+  for (const k of wantKeys.slice(0, firstWanted)) push(idx.teams[k]?.file, 64);      // ranking, matches page, our players' teams
+  for (const p of (esports?.tournaments || []).map((t) => t.id)) push(idx.tours[p]?.file, 64);
+  for (const [r, f] of photoRank) if (r <= 60) push(f, 160);                          // rosters of the world top 60
+  for (const p of need.tours) push(idx.tours[p]?.file, 64);                           // titles / recent tournaments
+  for (const k of wantKeys.slice(firstWanted)) push(idx.teams[k]?.file, 64);          // opponents on team pages
+  for (const [r, f] of photoRank) if (r > 60) push(f, 160);
+
+  // ---- file → thumbnail URL ----
+  for (const size of [64, 160]) {
+    const toResolve = queue.filter(([f, sz]) => sz === size && !idx.files[f]?.img && !idx.files[f]?.url && !(idx.files[f]?.miss > now - WEEK)).map(([f]) => f).slice(0, 2000);
+    for (const part of chunks(toResolve, 50)) {
+      let j;
+      try { j = await lp.call({ action: 'query', prop: 'imageinfo', iiprop: 'url', iiurlwidth: String(size), iiurlheight: String(size), titles: part.map((f) => 'File:' + f).join('|') }, 'lp-imageinfo'); } catch (e) { console.log('imageinfo:', e.message); break; }
+      const q = j.query || {};
+      const back = new Map();
+      for (const x of q.normalized || []) back.set(x.to, x.from);
+      for (const p of q.pages || []) {
+        const name = (back.get(p.title) || p.title).replace(/^File:/, '');
+        const ii = p.imageinfo?.[0];
+        idx.files[name] = ii?.thumburl || ii?.url ? { url: ii.thumburl || ii.url } : { miss: now };
+      }
     }
   }
 
-  // ---- download thumbnails (most wanted first: ranking order, then matches, then players) ----
-  const order = [...needFiles].filter((f) => idx.files[f]?.url && !idx.files[f]?.img);
+  // ---- download thumbnails ----
+  const order = queue.map(([f]) => f).filter((f) => idx.files[f]?.url && !idx.files[f]?.img);
   let got = 0, fail = 0;
   for (const f of order.slice(0, MAX_DL)) {
     try {
@@ -184,8 +278,15 @@ async function main() {
   const used = new Set();
   for (const [k, v] of Object.entries(idx.teams)) { const img = v.file && idx.files[v.file]?.img; if (img) { t[k] = img; used.add(img); } }
   for (const [p, v] of Object.entries(idx.tours)) { const img = v.file && idx.files[v.file]?.img; if (img) { e[p] = img; used.add(img); } }
+  const ph = {};
+  for (const [sid, v] of Object.entries(idx.players || {})) { const img = v.file && idx.files[v.file]?.img; if (img) { ph[sid] = img; used.add(img); } }
   for (const img of used) fs.copyFileSync(path.join(STORE, 'img', img), path.join(outDir, img));
-  fs.writeFileSync(path.join(OUT, 'logos.json'), JSON.stringify({ src: 'Liquipedia', at: idx.at, t, e }));
+  fs.writeFileSync(path.join(OUT, 'logos.json'), JSON.stringify({ src: 'Liquipedia', at: idx.at, t, e, p: ph }));
+  // team infoboxes for the team pages
+  const info = {};
+  for (const [pg, v] of Object.entries(idx.pages || {})) if (v.f && Object.keys(v.f).length) info[pg] = v.f;
+  if (fs.existsSync(path.join(OUT, 'teams'))) fs.writeFileSync(path.join(OUT, 'teams', 'info.json'), JSON.stringify(info));
+  console.log(`фото игроков: ${Object.keys(ph).length}, инфобоксов команд: ${Object.keys(info).length}`);
   const haveWanted = [...want.keys()].filter((k) => t[k]).length;
   console.log(`логотипы: скачано ${got}${fail ? `, не удалось ${fail}` : ''}, в очереди ${Math.max(0, order.length - MAX_DL)}; у команд сайта: ${haveWanted}/${want.size} ключей, турниров с иконкой: ${[...tours].filter((p) => e[p]).length}/${tours.size}; запросов к API: ${lp.count}`);
 }

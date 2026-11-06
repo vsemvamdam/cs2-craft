@@ -1,0 +1,39 @@
+name: История матчей команд (Liquipedia, каждый день)
+
+# Дозагружает новые и ещё идущие турниры в хранилище matches-hist (уже законченные не перекачиваются),
+# чтобы на страницах команд были вчерашние матчи, и пересобирает сайт. Полный еженедельный проход —
+# astro-matches.yml; общая группа concurrency не даёт им писать хранилище одновременно.
+on:
+  schedule:
+    - cron: '41 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: astro-matches
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Хранилище истории матчей
+        run: scripts/store.sh pull matches-hist
+      - name: Новые и идущие турниры
+        run: HIST_BUDGET_MIN=30 node scripts/fetch-matches-hist.mjs tournaments --store store/matches-hist --from 2021-01-01
+      - name: Новые команды (шаблон → страница)
+        run: node scripts/fetch-matches-hist.mjs teams --store store/matches-hist
+      - name: Сохранить и пересобрать сайт
+        run: |
+          scripts/store.sh push matches-hist
+          gh workflow run site.yml -f quick=true

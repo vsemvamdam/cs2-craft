@@ -41,3 +41,5 @@
 .pl-rrow span{text-align:right}
 a.pl-rrow:hover{background:var(--surface-2)}
 a.pl-rrow:hover b{color:var(--accent)}
+.pl-tname{color:inherit}
+.pl-tname:hover{color:var(--accent)}

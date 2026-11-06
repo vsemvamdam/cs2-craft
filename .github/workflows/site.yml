@@ -72,7 +72,14 @@ jobs:
             node scripts/fetch-faceit.mjs && scripts/store.sh push faceit || echo "::warning::FACEIT не обновился"
           fi
           node scripts/build-player-links.mjs || echo "::warning::профили игроков не собраны"
-      - name: Логотипы команд и иконки турниров (Liquipedia API)
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Страницы команд — все матчи с 2021 года, титулы (Liquipedia)
+        run: |
+          pip install -q pandas
+          python3 tools/teams/build_teams.py --hist store/matches-hist --out public/data/teams || echo "::warning::страницы команд не собраны"
+      - name: Логотипы команд, иконки турниров, фото игроков, сведения о командах (Liquipedia API)
         run: |
           scripts/store.sh pull logos
           if node scripts/fetch-logos.mjs; then scripts/store.sh push logos; else echo "::warning::логотипы не обновились"; fi

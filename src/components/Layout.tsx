@@ -98,7 +98,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const prefs = usePrefs();
   const [menu, setMenu] = useState(false);
   useEffect(() => setMenu(false), [route.path]);
-  const active = (to: string) => route.path === to || route.path.startsWith(to + '/') || (to === '/skins' && route.path.startsWith('/skin/')) || (to === '/collections' && route.path.startsWith('/collection/')) || (to === '/players' && route.path.startsWith('/player/'));
+  const active = (to: string) => route.path === to || route.path.startsWith(to + '/') || (to === '/skins' && route.path.startsWith('/skin/')) || (to === '/collections' && route.path.startsWith('/collection/')) || (to === '/players' && (route.path.startsWith('/player/') || route.path.startsWith('/team/')));
   return (
     <div className="app">
       <header className="header">
