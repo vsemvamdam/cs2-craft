@@ -72,6 +72,10 @@ jobs:
             node scripts/fetch-faceit.mjs && scripts/store.sh push faceit || echo "::warning::FACEIT не обновился"
           fi
           node scripts/build-player-links.mjs || echo "::warning::профили игроков не собраны"
+      - name: Логотипы команд и иконки турниров (Liquipedia API)
+        run: |
+          scripts/store.sh pull logos
+          if node scripts/fetch-logos.mjs; then scripts/store.sh push logos; else echo "::warning::логотипы не обновились"; fi
       - name: Аватары игроков (Steam)
         env:
           STEAM_API_KEY: ${{ secrets.STEAM_API_KEY }}

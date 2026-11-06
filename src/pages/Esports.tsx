@@ -1,4 +1,4 @@
-import { useTeamLogos } from '../lib/teams';
+import { useTeamLogos, useTourIcons } from '../lib/teams';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Spinner } from '../components/ui';
 import { setQuery, useRoute } from '../lib/router';
@@ -191,6 +191,13 @@ function Mono({ t }: { t: Team }) {
   const letters = (t.n.match(/[A-Za-zА-Яа-я0-9]/g) || ['?']).slice(0, 2).join('').toUpperCase();
   return <span className="es-mono" style={{ ['--h' as string]: hue(t.f || t.n) }} aria-hidden>{letters}</span>;
 }
+/** tournament icon (Liquipedia), nothing when there is none */
+function TourIcon({ page, size = 18 }: { page?: string; size?: number }) {
+  const icon = useTourIcons();
+  const [bad, setBad] = useState(false);
+  const src = bad ? null : icon(page);
+  return src ? <img className="es-ticon" src={src} alt="" width={size} height={size} loading="lazy" onError={() => setBad(true)} /> : null;
+}
 const TierBadge = ({ tier }: { tier?: string }) => (tier ? <span className={'es-tier t-' + tier} title={`${tier}-Tier по классификации Liquipedia`}>{tier}</span> : null);
 
 // ── page ───────────────────────────────────────────────────────────────────
@@ -313,6 +320,7 @@ export default function Esports() {
             <p className="muted">
               Матчи и турниры: <a className="link" href="https://liquipedia.net/counterstrike/" target="_blank" rel="noreferrer">Liquipedia</a>, лицензия{' '}
               <a className="link" href="https://creativecommons.org/licenses/by-sa/3.0/deed.ru" target="_blank" rel="noreferrer">CC BY-SA 3.0</a>. Данные взяты через API Liquipedia и сокращены.
+              Логотипы команд и иконки турниров — с Liquipedia; они принадлежат командам и организаторам и показаны только для узнаваемости.
             </p>
             <p className="muted">
               Цены рынка предсказаний: <a className="link" href="https://polymarket.com" target="_blank" rel="noreferrer">Polymarket</a> (публичный API).
@@ -354,6 +362,7 @@ function OngoingTours({ data }: { data: Data }) {
       {list.map((t) => (
         <button key={t.id} className="es-ongoing-row" onClick={() => setQuery({ tab: null, t: t.id })}>
           <TierBadge tier={t.tier} />
+          <TourIcon page={t.id} size={24} />
           <span className="grow">
             <b>{t.short || t.name}</b>
             <span className="tiny muted">{dateRange(t.start, t.end)}{t.prize ? ' · ' + money(t.prize, t.cur) : ''}</span>
@@ -452,6 +461,7 @@ function MatchRow({ m, data, now, oddsCol }: { m: Match; data: Data; now: number
       <div className="es-meta">
         <div className="es-tourline">
           <TierBadge tier={m.tier} />
+          <TourIcon page={m.tp} />
           <button className="es-tour" onClick={() => setQuery({ t: m.tp || m.tour, tab: null })} title={`${m.tour}${m.stage ? ' · ' + m.stage : ''} — показать матчи турнира`}>
             <span className="es-tour-n">{m.tour}</span>{m.stage ? <span className="es-stage">{m.stage}</span> : null}
           </button>
@@ -554,7 +564,7 @@ function TourCard({ t, now }: { t: Tournament; now: number }) {
         </span>
         {status}
       </div>
-      <h3 className="es-tname-h">{t.name}</h3>
+      <h3 className="es-tname-h row" style={{ gap: 8, flexWrap: 'nowrap' }}><TourIcon page={t.id} size={28} /><span>{t.name}</span></h3>
       <div className="small muted">{dateRange(t.start, t.end)}{place(t) ? ` · ${place(t)}` : ''}</div>
       {facts.length > 0 && <div className="es-tfacts small">{facts}</div>}
       <div className="row" style={{ gap: 8, marginTop: 'auto' }}>
