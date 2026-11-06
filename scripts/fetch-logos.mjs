@@ -191,6 +191,10 @@ async function main() {
   }
   // ranked teams whose page is named differently (sponsor names: «Betclic» → «Betclic Apogee Esports»):
   // full-text search, the first result that is a team page with a logo (≤ 15 searches a run)
+  // the first version of this search accepted any page whose name merely contained the ranked name
+  // (STATE → Sissi State Punks, PCIFIC → WRAITH PCIFIC): forget those matches once
+  if (idx.searchV !== 2) { for (const k of ['state', 'pcific']) delete idx.teams[k]; idx.searchV = 2; }
+  const rosterOf = new Map((read(path.join(OUT, 'rankings.json'))?.teams || []).map((t) => [t[2], t[3]]));
   const rankedMissing = (read(path.join(OUT, 'rankings.json'))?.teams || []).slice(0, 150).map((t) => t[2])
     .filter((n) => !/^ex-|^ex /i.test(n) && !teamKeys(n).some((k) => idx.teams[k]?.file) && !(idx.teams[teamKeys(n)[0]]?.searched > now - 30 * 86400000));
   for (const n of OFFLINE ? [] : rankedMissing.slice(0, 15)) {
@@ -200,16 +204,19 @@ async function main() {
     let found = '';
     if (cands.length) {
       let jj;
-      try { jj = await lp.call({ action: 'query', prop: 'revisions', rvprop: 'content', rvslots: 'main', rvsection: '0', titles: cands.join('|') }, 'lp-team-search-pages'); } catch { jj = null; }
+      try { jj = await lp.call({ action: 'query', prop: 'revisions', rvprop: 'content', rvslots: 'main', titles: cands.join('|') }, 'lp-team-search-pages'); } catch { jj = null; }
       const pages = new Map((jj?.query?.pages || []).map((p) => [p.title, p.revisions?.[0]?.slots?.main?.content || '']));
       for (const t of cands) {
         const content = pages.get(t) || '';
         if (!/\{\{\s*Infobox[ _]team/i.test(content)) continue;
         const ib = parseInfobox(content.replace(/Infobox[ _]team/i, 'Infobox league'));
         const nm = String(ib?.name || t).toLowerCase();
-        // accept only when the team's name contains the ranked name (or the other way round)
+        // accept when the page's name starts with the ranked name, or its current roster has ≥ 2 of the
+        // players Valve lists for that team (sponsor names: «Betclic» → «Betclic Apogee Esports»)
         const a = teamKeys(n)[0], b = teamKeys(nm)[0] || '';
-        if (!(b.includes(a) || a.includes(b))) continue;
+        const squadIds = new Set((() => { try { return parseSquad(content).squad.map((x) => x.id.toLowerCase()); } catch { return []; } })());
+        const shared = (rosterOf.get(n) || []).filter((p) => squadIds.has(p.toLowerCase())).length;
+        if (!(b === a || b.startsWith(a) || shared >= 2)) continue;
         const file = [ib?.imagedark, ib?.imagedarkmode, ib?.image].map((x) => (x || '').replace(/^(File|Image):/i, '').trim()).find((x) => x && !DEFAULT.test(x));
         if (file) { found = file; for (const k of teamKeys(n)) idx.teams[k] = { file }; console.log(`логотип найден поиском: ${n} → ${t}`); break; }
       }
