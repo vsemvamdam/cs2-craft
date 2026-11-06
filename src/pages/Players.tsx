@@ -163,12 +163,12 @@ function PlayerList() {
             {tab === 'teams' && <TeamsControls />}
             {tab === 'players' && (
               <>
-                <select className="select small" value={team} onChange={(e) => setQuery({ team: e.target.value })}>
+                <select className="select small" aria-label="Команда" value={team} onChange={(e) => setQuery({ team: e.target.value })}>
                   <option value="">Все команды</option>
                   {teams.map((t) => <option key={t.team} value={t.team}>{t.team}</option>)}
                 </select>
                 <label className="row small muted" style={{ gap: 6 }}>от
-                  <select className="select small" value={min} onChange={(e) => setQuery({ min: e.target.value })}>
+                  <select className="select small" aria-label="Минимум карт" value={min} onChange={(e) => setQuery({ min: e.target.value })}>
                     {[1, 3, 5, 10, 20].map((n) => <option key={n} value={n}>{n}</option>)}
                   </select>карт
                 </label>
@@ -372,7 +372,7 @@ function TeamsControls() {
       <div className="seg">
         {[['', 'Весь мир'], ['EU', 'Европа'], ['AM', 'Америка'], ['AS', 'Азия']].map(([k, ru]) => <button key={k} className={reg === k ? 'on' : ''} onClick={() => setQuery({ reg: k || null })}>{ru}</button>)}
       </div>
-      <select className="select small" value={tsort} onChange={(e) => setQuery({ tsort: e.target.value === 'rank' ? null : e.target.value })}>
+      <select className="select small" aria-label="Сортировка команд" value={tsort} onChange={(e) => setQuery({ tsort: e.target.value === 'rank' ? null : e.target.value })}>
         <option value="rank">По мировому рейтингу</option>
         <option value="maps">По картам в наших демках</option>
       </select>
@@ -380,16 +380,19 @@ function TeamsControls() {
   );
 }
 
-type TeamCard = { name: string; rank?: number; pts?: number; reg?: string; rr?: number; prev?: number; roster: { nick: string; p?: Row }[]; demo?: { team: string; maps: number } };
+type TeamCard = { name: string; rank?: number; pts?: number; reg?: string; rr?: number; prev?: number; roster: { nick: string; p?: Row; sid?: string }[]; demo?: { team: string; maps: number } };
 
-type SquadInfo = Record<string, { squad?: { id: string; role: string; sid?: string; inactive?: number }[] }>;
+type SquadPerson = { id: string; role: string; sid?: string; inactive?: number };
+type SquadInfo = Record<string, { squad?: SquadPerson[]; standins?: SquadPerson[] }>;
 let squadsP: Promise<SquadInfo> | null = null;
 function TeamsTab({ rows, teams, q, avatars, logo }: { rows: Row[]; teams: { team: string; players: Row[]; maps: number }[]; q: string; avatars: Record<string, string>; logo: ReturnType<typeof useTeamLogos> }) {
   const rk = useRanking();
   // official rosters (Liquipedia team pages) replace the roster Valve counted, where we have them
   const [squads, setSquads] = useState<SquadInfo>({});
   const [tix, setTix] = useState<TeamIndex | null>(null);
+  const [photos, setPhotos] = useState<Record<string, string>>({});
   useEffect(() => {
+    loadLpLogos().then((x) => setPhotos(x?.p || {}));
     squadsP ||= fetch(import.meta.env.BASE_URL + 'data/teams/info.json').then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
     squadsP.then(setSquads);
     loadTeamIndex().then(setTix);
@@ -410,15 +413,15 @@ function TeamsTab({ rows, teams, q, avatars, logo }: { rows: Row[]; teams: { tea
     for (const [rank, pts, name, roster, region, rr, prev] of rk?.teams || []) {
       const d = teamKeys(name).map((k) => demo.get(k)).find(Boolean);
       if (d) used.add(d.team);
+      // who plays now = the roster Valve counted; the Liquipedia squad gives SteamIDs to find their demo stats
       const pg = pageOf(name);
-      const official = (pg && squads[pg]?.squad?.filter((x) => !x.role && !x.inactive)) || [];
-      const players = official.length >= 4
-        ? official.map((x) => ({ nick: x.id, p: (x.sid && bySid.get(x.sid)) || (byNick.get(x.id.toLowerCase()) || []).sort((a, b) => b.maps - a.maps)[0] }))
-        : roster.map((nick) => {
-          const cands = byNick.get(nick.toLowerCase()) || [];
-          const p = cands.find((c) => d && c.team === d.team) || cands.sort((a, b) => b.maps - a.maps)[0];
-          return { nick, p };
-        });
+      const people = pg ? [...(squads[pg]?.squad || []), ...(squads[pg]?.standins || [])] : [];
+      const players = roster.map((nick) => {
+        const x = people.find((y) => y.id.toLowerCase() === nick.toLowerCase());
+        const cands = byNick.get(nick.toLowerCase()) || [];
+        const p = (x?.sid && bySid.get(x.sid)) || cands.find((c) => d && c.team === d.team) || cands.sort((a, b) => b.maps - a.maps)[0];
+        return { nick, p, sid: x?.sid };
+      });
       out.push({ name, rank, pts, reg: region, rr, prev, roster: players, demo: d ? { team: d.team, maps: d.maps } : undefined });
     }
     // teams we have demos of but that are not in the ranking (academies, old rosters)
@@ -434,7 +437,7 @@ function TeamsTab({ rows, teams, q, avatars, logo }: { rows: Row[]; teams: { tea
     <div className="stack" style={{ gap: 12 }}>
       {rk && <p className="small muted">Мировой рейтинг — официальный рейтинг Valve (Valve Regional Standings), по нему зовут на мейджоры. Обновлён {new Date(rk.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}{rk.prev ? `, стрелки — изменение места с ${new Date(rk.prev).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}` : ''}. Статистика игроков — из наших турнирных демок.</p>}
       <div className="pl-teams">
-        {list.slice(0, limit).map((c) => <TeamCardView key={c.name + (c.rank || '')} c={c} avatars={avatars} logo={logo} />)}
+        {list.slice(0, limit).map((c) => <TeamCardView key={c.name + (c.rank || '')} c={c} avatars={avatars} photos={photos} logo={logo} />)}
       </div>
       {list.length > limit && <button className="btn" onClick={() => setLimit((l) => l + 120)}>Показать ещё ({list.length - limit})</button>}
       {!list.length && <div className="empty">Ничего не найдено</div>}
@@ -442,7 +445,7 @@ function TeamsTab({ rows, teams, q, avatars, logo }: { rows: Row[]; teams: { tea
   );
 }
 
-function TeamCardView({ c, avatars, logo }: { c: TeamCard; avatars: Record<string, string>; logo: ReturnType<typeof useTeamLogos> }) {
+function TeamCardView({ c, avatars, photos, logo }: { c: TeamCard; avatars: Record<string, string>; photos: Record<string, string>; logo: ReturnType<typeof useTeamLogos> }) {
   const move = c.rank && c.prev ? c.prev - c.rank : null;
   const slugOf = useTeamSlug();
   const slug = slugOf(c.name, c.demo?.team);
@@ -462,16 +465,18 @@ function TeamCardView({ c, avatars, logo }: { c: TeamCard; avatars: Record<strin
         </div>
       </div>
       <div className="pl-roster">
-        {c.roster.map(({ nick, p }) => {
+        {c.roster.map(({ nick, p, sid }) => {
           const inner = (
             <>
-              {p ? <PlayerAvatar sid={p.sid} name={p.name} size={26} avatars={avatars} /> : <span className="pl-ava pl-ini" style={{ width: 26, height: 26, fontSize: 10, background: `hsl(${HUE(nick)} 25% 28%)` }}>{nick.slice(0, 2).toUpperCase()}</span>}
+              {(p?.sid || sid) && photos[(p?.sid || sid)!] ? <img className="pl-ava pl-photo" src={import.meta.env.BASE_URL + 'data/logos/' + photos[(p?.sid || sid)!]} alt="" width={26} height={26} loading="lazy" />
+                : p || sid ? <PlayerAvatar sid={p?.sid || sid!} name={nick} size={26} avatars={avatars} /> : <span className="pl-ava pl-ini" style={{ width: 26, height: 26, fontSize: 10, background: `hsl(${HUE(nick)} 25% 28%)` }}>{nick.slice(0, 2).toUpperCase()}</span>}
               <b className="pl-ell" title={nick}>{nick}</b>
               <span className="num tiny" title="K/D">{p ? f2(p.k / Math.max(p.d, 1)) : ''}</span>
               <span className="num tiny muted" title="ADR">{p ? f1(p.adr) : ''}</span>
             </>
           );
-          return p ? <a key={nick} className="pl-rrow" href={href(`/player/${p.sid}`)}>{inner}</a> : <div key={nick} className="pl-rrow">{inner}</div>;
+          const to = p?.sid || sid;
+          return to ? <a key={nick} className="pl-rrow" href={href(`/player/${to}`)}>{inner}</a> : <div key={nick} className="pl-rrow">{inner}</div>;
         })}
       </div>
       <div className="row between tiny">

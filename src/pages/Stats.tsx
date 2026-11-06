@@ -79,7 +79,7 @@ function StatsHome() {
             <div className="seg st-seg-scroll">
               {LADDERS.map((x) => <button key={x.k} className={by === x.k ? 'on' : ''} onClick={() => setQuery({ by: x.k === 'xp' ? null : x.k, page: null })}>{x.ru}</button>)}
             </div>
-            <select className="select small" value={country} onChange={(e) => setQuery({ country: e.target.value || null, page: null })}>
+            <select aria-label="Страна" className="select small" value={country} onChange={(e) => setQuery({ country: e.target.value || null, page: null })}>
               <option value="">Все страны</option>
               {(lad.data?.countries || []).map((c) => <option key={c.country} value={c.country}>{flag(c.country)} {c.country} · {c.n}</option>)}
             </select>

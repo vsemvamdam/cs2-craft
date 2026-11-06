@@ -83,7 +83,7 @@ function FadeCalc() {
         <div className="seg">{(Object.keys(FADE_SUPPORTED_WEAPONS) as FadeFinish[]).map((f) => <button key={f} className={finish === f ? 'on' : ''} onClick={() => setFinish(f)}>{f}</button>)}</div>
       </div>
       <div className="row">
-        <select className="select grow" value={w} onChange={(e) => setWeapon(e.target.value)}>{weapons.map((x) => <option key={x} value={x}>{x}</option>)}</select>
+        <select aria-label="Оружие" className="select grow" value={w} onChange={(e) => setWeapon(e.target.value)}>{weapons.map((x) => <option key={x} value={x}>{x}</option>)}</select>
         <input className="input num" style={{ width: 100 }} value={seed} inputMode="numeric" onChange={(e) => setSeed(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="сид" />
       </div>
       <SkinShowcase skin={findSkin(db, w, finish)} prices={prices} note="Картинка — общий вид скина; как ляжет градиент на конкретный сид, показывает процент ниже." />
@@ -113,7 +113,7 @@ function SeedLookup() {
     <div className="card pad stack">
       <h3>Редкие сиды: blue gem, Fire &amp; Ice и др.</h3>
       <div className="row">
-        <select className="select grow" value={item} onChange={(e) => setItem(e.target.value)}>
+        <select aria-label="Скин" className="select grow" value={item} onChange={(e) => setItem(e.target.value)}>
           {items.map((i) => { const [a, b] = i.split('|'); return <option key={i} value={i}>{a} | {PATTERN_FINISHES[b as keyof typeof PATTERN_FINISHES]?.titleRu || b}</option>; })}
         </select>
         <input className="input num" style={{ width: 100 }} value={seed} inputMode="numeric" onChange={(e) => setSeed(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="ваш сид" />

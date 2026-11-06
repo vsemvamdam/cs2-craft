@@ -70,7 +70,7 @@ function SensTool() {
       <div className="card pad stack">
         <h3>Перевод сенсы из другой игры</h3>
         <div className="row">
-          <select className="select" value={from} onChange={(e) => setFrom(e.target.value)}>{GAMES.map((g) => <option key={g.k} value={g.k}>{g.ru}</option>)}</select>
+          <select aria-label="Игра" className="select" value={from} onChange={(e) => setFrom(e.target.value)}>{GAMES.map((g) => <option key={g.k} value={g.k}>{g.ru}</option>)}</select>
           <input className="input num" type="number" step="0.001" value={fromSens} onChange={(e) => setFromSens(+e.target.value || 0)} />
         </div>
         <div className="kpi"><div className="label">Сенса в CS2 (тот же DPI)</div><div className="value">{csFrom.toFixed(3)}</div></div>

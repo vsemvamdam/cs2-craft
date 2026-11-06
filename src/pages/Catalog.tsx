@@ -91,7 +91,7 @@ export default function Catalog() {
           <OtherTypes cat={cat} />
           <div>
             <h4>Оружие</h4>
-            <select className="select" style={{ width: '100%' }} value={wpn} onChange={(e) => setQuery({ w: e.target.value })}>
+            <select className="select" aria-label="Оружие" style={{ width: '100%' }} value={wpn} onChange={(e) => setQuery({ w: e.target.value })}>
               <option value="">Любое</option>
               {weapons.map((w) => <option key={w} value={w}>{w}</option>)}
             </select>
@@ -108,7 +108,7 @@ export default function Catalog() {
           </div>
           <div>
             <h4>Коллекция</h4>
-            <select className="select" style={{ width: '100%' }} value={col} onChange={(e) => setQuery({ c: e.target.value })}>
+            <select className="select" aria-label="Коллекция" style={{ width: '100%' }} value={col} onChange={(e) => setQuery({ c: e.target.value })}>
               <option value="">Любая</option>
               {[...db.collections].sort((a, b) => b.date.localeCompare(a.date)).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
@@ -119,7 +119,7 @@ export default function Catalog() {
           </div>
           <div>
             <h4>Сортировка</h4>
-            <select className="select" style={{ width: '100%' }} value={sort} onChange={(e) => setQuery({ sort: e.target.value })}>
+            <select className="select" aria-label="Сортировка" style={{ width: '100%' }} value={sort} onChange={(e) => setQuery({ sort: e.target.value })}>
               {SORTS.map((s) => <option key={s.k} value={s.k}>{s.ru}</option>)}
             </select>
           </div>
@@ -234,7 +234,7 @@ function OtherCatalog({ cat, prices }: { cat: string; prices: Prices | null }) {
           {kinds.length > 1 && (
             <div>
               <h4>{cat === 'sticker' ? 'Турнир / вид' : 'Вид'}</h4>
-              <select className="select" style={{ width: '100%' }} value={kind} onChange={(e) => setQuery({ kind: e.target.value || null })}>
+              <select className="select" aria-label="Вид предмета" style={{ width: '100%' }} value={kind} onChange={(e) => setQuery({ kind: e.target.value || null })}>
                 <option value="">Любой</option>
                 {kinds.map(([k, n]) => <option key={k} value={k}>{k} ({n})</option>)}
               </select>
@@ -255,7 +255,7 @@ function OtherCatalog({ cat, prices }: { cat: string; prices: Prices | null }) {
           <label className="check"><input type="checkbox" checked={onMarket} onChange={(e) => setQuery({ mk: e.target.checked ? 1 : null })} />Только продающиеся на маркете</label>
           <div>
             <h4>Сортировка</h4>
-            <select className="select" style={{ width: '100%' }} value={sort} onChange={(e) => setQuery({ sort: e.target.value })}>
+            <select className="select" aria-label="Сортировка" style={{ width: '100%' }} value={sort} onChange={(e) => setQuery({ sort: e.target.value })}>
               {SORTS.map((s) => <option key={s.k} value={s.k}>{s.ru}</option>)}
             </select>
           </div>

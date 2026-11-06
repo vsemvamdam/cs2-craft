@@ -233,19 +233,35 @@ function Roster({ teamName, rank, squad, standins, pix, links, extra, avatars, p
   }, [pix]);
   const bySid = useMemo(() => new Map(all.map((p) => [p.sid, p])), [all]);
   const byNick = (nick: string) => { const cands = all.filter((p) => p.name.toLowerCase() === nick.toLowerCase()); return cands.find((x) => isUs(x.team)) || cands.sort((x, y) => y.maps - x.maps)[0]; };
-  // the official roster from the team's Liquipedia page; without it — the roster Valve counted for the ranking
-  const players = squad?.filter((x) => !x.role) || [];
-  const rows: { nick: string; sid?: string; p?: P; flag?: string; real?: string; igl?: boolean; inactive?: boolean }[] = players.length
-    ? players.map((x) => { const p = (x.sid && bySid.get(x.sid)) || byNick(x.id); return { nick: x.id, sid: x.sid || p?.sid, p, flag: x.flag, real: x.name, igl: !!x.igl, inactive: !!x.inactive }; })
-    : rank ? rank[3].map((nick) => { const p = byNick(nick); return { nick, sid: p?.sid, p }; })
-      : all.filter((p) => isUs(p.team)).sort((a, b) => b.maps - a.maps).slice(0, 5).map((p) => ({ nick: p.name, sid: p.sid, p }));
+  // Current lineup = who plays now: the roster Valve counted for its latest ranking (it follows the latest
+  // matches, so a stand-in who plays every event is in it). The Liquipedia page adds names, flags, SteamIDs and
+  // the players of the official roster who are not playing right now.
+  const official = squad?.filter((x) => !x.role) || [];
+  const find = (nick: string) => official.find((x) => x.id.toLowerCase() === nick.toLowerCase()) || standins?.find((x) => x.id.toLowerCase() === nick.toLowerCase());
+  type R = { nick: string; sid?: string; p?: P; flag?: string; real?: string; igl?: boolean; inactive?: boolean; sub?: string };
+  const fromPerson = (x: Person, sub?: string): R => { const p = (x.sid && bySid.get(x.sid)) || byNick(x.id); return { nick: x.id, sid: x.sid || p?.sid, p, flag: x.flag, real: x.name, igl: !!x.igl, inactive: !!x.inactive, sub }; };
+  let rows: R[];
+  if (rank?.[3]?.length) {
+    rows = rank[3].map((nick) => {
+      const x = find(nick);
+      const isSub = !!x && !official.includes(x);
+      if (x) return fromPerson(x, isSub ? (x.for ? `замена за ${x.for}` : 'замена') : undefined);
+      const p = byNick(nick);
+      return { nick, sid: p?.sid, p };
+    });
+  } else if (official.length) rows = official.filter((x) => !x.inactive).map((x) => fromPerson(x));
+  else rows = all.filter((p) => isUs(p.team)).sort((a, b) => b.maps - a.maps).slice(0, 5).map((p) => ({ nick: p.name, sid: p.sid, p }));
   if (!rows.length) return null;
-  const subs = (standins || []).filter((x) => !x.role && !players.some((pl) => pl.id.toLowerCase() === x.id.toLowerCase()));
+  const inRows = (id: string) => rows.some((r) => r.nick.toLowerCase() === id.toLowerCase());
+  // official players who are not in the current lineup (benched, or replaced for now)
+  const others = official.filter((x) => !inRows(x.id)).map((x) => fromPerson(x));
+  const subs = (standins || []).filter((x) => !x.role && !inRows(x.id) && !official.some((pl) => pl.id.toLowerCase() === x.id.toLowerCase()));
+  const players = official;
   return (
     <section className="tm-card">
-      <h3 className="tm-h">Основной состав<span className="tm-hsub">{players.length ? 'официальный, по Liquipedia' : rank ? 'по рейтингу Valve' : 'по нашим демкам'}</span></h3>
+      <h3 className="tm-h">Основной состав<span className="tm-hsub">{rank?.[3]?.length ? 'кто играет сейчас — по рейтингу Valve' : players.length ? 'официальный, по Liquipedia' : 'по нашим демкам'}</span></h3>
       <div className="tm-roster">
-        {rows.map(({ nick, sid, p, flag, real, igl, inactive }) => {
+        {rows.map(({ nick, sid, p, flag, real, igl, inactive, sub }) => {
           const li = sid ? links[sid] || extra[sid] : undefined;
           const photo = sid && photos[sid] ? import.meta.env.BASE_URL + 'data/logos/' + photos[sid] : sid && avatars[sid] ? `https://avatars.steamstatic.com/${avatars[sid]}_full.jpg` : '';
           const roles = (li?.r || '').split(',').filter(Boolean);
@@ -257,6 +273,7 @@ function Roster({ teamName, rank, squad, standins, pix, links, extra, avatars, p
               {role ? <span className="tm-role" title={roles.map((r) => ROLE_RU[r] || r).join(', ')}>{role}</span> : <span className="tm-role empty" />}
               <b className="tm-nick">{fl && flagUrl(fl) ? <img className="tm-flag" src={flagUrl(fl)} alt="" title={flag ? countryFromFlag(flag) : countryRu(fl)} /> : null}{nick}</b>
               <span className="tm-real">{real || li?.rn || li?.name || ' '}</span>
+              {sub ? <span className="tm-pill sub">{sub}</span> : null}
               {inactive ? <span className="tm-pill dim">в запасе</span> : p ? <span className="tm-pill">{p.maps} карт · ADR {p.adr.toFixed(0)}</span> : <span className="tm-pill dim">нет в наших демках</span>}
               {p ? <span className={'tm-kd num' + (p.kd >= 1.1 ? ' good' : p.kd < 0.95 ? ' bad' : '')}>K/D {p.kd.toFixed(2)}</span> : null}
             </>
@@ -264,9 +281,18 @@ function Roster({ teamName, rank, squad, standins, pix, links, extra, avatars, p
           return sid ? <a key={nick} className="tm-player" href={href(`/player/${sid}`)} title={`${nick} — профиль игрока`}>{body}</a> : <div key={nick} className="tm-player">{body}</div>;
         })}
       </div>
+      {others.length > 0 && (
+        <div className="tm-subs">
+          <span className="tiny muted">Ещё в составе по Liquipedia:</span>
+          {others.map((x) => {
+            const inner = <>{x.flag && flagUrl(x.flag) ? <img className="tm-flag" src={flagUrl(x.flag)} alt="" /> : null}<b>{x.nick}</b><span className="muted"> {x.inactive ? '· в запасе' : '· не играл последние матчи'}</span></>;
+            return x.sid ? <a key={x.nick} className="tm-sub" href={href(`/player/${x.sid}`)}>{inner}</a> : <span key={x.nick} className="tm-sub">{inner}</span>;
+          })}
+        </div>
+      )}
       {subs.length > 0 && (
         <div className="tm-subs">
-          <span className="tiny muted">Замены:</span>
+          <span className="tiny muted">Играли на замене:</span>
           {subs.map((x, i) => {
             const inner = <>{x.flag && flagUrl(x.flag) ? <img className="tm-flag" src={flagUrl(x.flag)} alt="" /> : null}<b>{x.id}</b>{x.for ? <span className="muted"> за {x.for}</span> : null}{x.tour ? <span className="faint"> · {x.tour}</span> : null}</>;
             return x.sid ? <a key={i} className="tm-sub" href={href(`/player/${x.sid}`)}>{inner}</a> : <span key={i} className="tm-sub">{inner}</span>;

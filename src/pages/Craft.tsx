@@ -370,20 +370,20 @@ function Library({ stickers, charms, prices, onSticker, onCharm }: { stickers: S
         <div className="stack" style={{ padding: 12, gap: 10 }}>
           <input className="input" placeholder="Команда, игрок, турнир…" value={q} onChange={(e) => setQ(e.target.value)} />
           <div className="row" style={{ gap: 6 }}>
-            <select className="select small grow" value={effect} onChange={(e) => setEffect(e.target.value)}>
+            <select aria-label="Эффект" className="select small grow" value={effect} onChange={(e) => setEffect(e.target.value)}>
               <option value="">Любой тип</option>
               {Object.entries(STICKER_EFFECTS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
-            <select className="select small grow" value={type} onChange={(e) => setType(e.target.value)}>
+            <select aria-label="Тип наклейки" className="select small grow" value={type} onChange={(e) => setType(e.target.value)}>
               <option value="">Все</option><option value="A">Автографы</option><option value="T">Команды</option><option value="E">Турниры</option><option value="O">Прочие</option>
             </select>
           </div>
           <div className="row" style={{ gap: 6 }}>
-            <select className="select small grow" value={tour} onChange={(e) => setTour(e.target.value)}>
+            <select aria-label="Турнир" className="select small grow" value={tour} onChange={(e) => setTour(e.target.value)}>
               <option value="">Любой турнир</option>
               {tours.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
-            <select className="select small" value={sort} onChange={(e) => setSort(e.target.value as any)}>
+            <select aria-label="Сортировка" className="select small" value={sort} onChange={(e) => setSort(e.target.value as any)}>
               <option value="new">Новые</option><option value="price-desc">Дороже</option><option value="price-asc">Дешевле</option>
             </select>
           </div>

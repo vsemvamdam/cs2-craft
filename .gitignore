@@ -13,3 +13,9 @@ __pycache__/
 public/data/nades/x/
 public/data/callouts/de_*.json
 public/data/players/
+# generated in CI (tools/teams/build_teams.py, scripts/fetch-logos.mjs, build-items/rankings) — local test copies
+public/data/teams/
+public/data/logos/
+public/data/logos.json
+test-results/
+playwright-report/

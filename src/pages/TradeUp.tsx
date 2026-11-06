@@ -71,17 +71,17 @@ export default function TradeUp() {
         </div>
         <div className="row" style={{ gap: 10 }}>
           <span className="small muted">Цены</span>
-          <select className="select small" value={prefs.source} onChange={(e) => setPrefs({ source: e.target.value as Source })}>
+          <select aria-label="Источник цен" className="select small" value={prefs.source} onChange={(e) => setPrefs({ source: e.target.value as Source })}>
             <option value="steam">Steam</option>
             <option value="skinport">Skinport</option>
             <option value="best">Лучшая из двух</option>
           </select>
           <span className="small muted">Продажа</span>
-          <select className="select small" value={fee} onChange={(e) => setFee(e.target.value)}>
+          <select aria-label="Комиссия" className="select small" value={fee} onChange={(e) => setFee(e.target.value)}>
             {FEES.map((f) => <option key={f.k} value={f.k}>{f.ru}</option>)}
           </select>
           {cfg.mode === 'gold' && (
-            <select className="select small" value={phases} onChange={(e) => setPhases(e.target.value)} title="Шансы фаз Doppler">
+            <select aria-label="Шансы фаз Doppler" className="select small" value={phases} onChange={(e) => setPhases(e.target.value)} title="Шансы фаз Doppler">
               {Object.entries(PHASE_PRESETS).map(([k, v]) => <option key={k} value={k}>Фазы: {v.ru}</option>)}
             </select>
           )}
@@ -284,12 +284,12 @@ function Picker({ db, prices, cfg, rarity, onAdd, onClose }: { db: Indexed; pric
           <div className="row">
             <input autoFocus className="input grow" placeholder="Название скина…" value={q} onChange={(e) => setQ(e.target.value)} />
             {cfg.mode === 'weapon' && (
-              <select className="select" value={rar} disabled={lockedRar} onChange={(e) => setRar(+e.target.value)} title={lockedRar ? 'Редкость задана первым предметом' : ''}>
+              <select aria-label="Редкость" className="select" value={rar} disabled={lockedRar} onChange={(e) => setRar(+e.target.value)} title={lockedRar ? 'Редкость задана первым предметом' : ''}>
                 {!lockedRar && <option value={0}>Все редкости</option>}
                 {[5, 4, 3, 2, 1].map((r) => <option key={r} value={r}>{RARITIES[r].ru}</option>)}
               </select>
             )}
-            <select className="select" value={col} onChange={(e) => setCol(e.target.value)} style={{ maxWidth: 260 }}>
+            <select aria-label="Коллекция" className="select" value={col} onChange={(e) => setCol(e.target.value)} style={{ maxWidth: 260 }}>
               <option value="">Все коллекции</option>
               {cols.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>

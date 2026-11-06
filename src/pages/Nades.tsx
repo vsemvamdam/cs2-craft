@@ -251,19 +251,19 @@ function MapView({ m, maps }: { m: MapInfo; maps: MapInfo[] }) {
             </div>
             <div className="nd-side-sec stack" style={{ gap: 8 }}>
               <div className="nd-label">Фильтры</div>
-              <select className="select small" value={player} onChange={(e) => setQuery({ player: e.target.value || null, tg: null })}>
+              <select aria-label="Игрок" className="select small" value={player} onChange={(e) => setQuery({ player: e.target.value || null, tg: null })}>
                 <option value="">Все игроки</option>
                 {players.map((p) => <option key={p.name} value={p.name}>{p.name}{p.team ? ` (${p.team})` : ''} · {p.n}</option>)}
               </select>
               {events.length > 1 && (
-                <select className="select small" value={event} onChange={(e) => setQuery({ event: e.target.value || null, tg: null })}>
+                <select aria-label="Турнир" className="select small" value={event} onChange={(e) => setQuery({ event: e.target.value || null, tg: null })}>
                   <option value="">Все турниры</option>
                   {events.map((e) => <option key={e} value={e}>{e}</option>)}
                 </select>
               )}
               {!player && tab !== 'fav' && (
                 <label className="row small muted" style={{ gap: 6 }}>Популярность от
-                  <select className="select small" value={min} onChange={(e) => setQuery({ min: e.target.value })}>
+                  <select aria-label="Минимум бросков" className="select small" value={min} onChange={(e) => setQuery({ min: e.target.value })}>
                     {[3, 5, 10, 20, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
                   </select>бросков
                 </label>

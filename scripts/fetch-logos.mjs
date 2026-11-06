@@ -38,6 +38,8 @@ const STORE = arg('store', 'store/logos');
 const HIST = arg('hist', 'store/matches-hist');
 const OUT = arg('out', 'public/data');
 const MAX_DL = +(process.env.LOGOS_MAX_DOWNLOADS || 300);
+// --offline: no requests to Liquipedia — only rebuild the site files from the store (local tests)
+const OFFLINE = argv.includes('--offline');
 const REPO = process.env.GITHUB_REPOSITORY || 'vsemvamdam/cs2-craft';
 const WEEK = 7 * 86400000;
 
@@ -133,8 +135,10 @@ async function main() {
     const pg = slug && slugName.get(slug);
     if (pg && !rankedPages.includes(pg)) rankedPages.push(pg);
   }
-  const stale = (p) => !idx.pages[p]?.sq || !(idx.pages[p].at > now - (rankedPages.includes(p) ? WEEK : 30 * 86400000));
-  const pagesTodo = [...new Set([...rankedPages, ...need.pages])].filter(stale).slice(0, 300);
+  // also refetch pages read before staff had page links (photos of coaches / managers need them)
+  const stale = (p) => !idx.pages[p]?.sq || (idx.pages[p].f?.staff || []).some((x) => x.length < 5)
+    || !(idx.pages[p].at > now - (rankedPages.includes(p) ? WEEK : 30 * 86400000));
+  const pagesTodo = OFFLINE ? [] : [...new Set([...rankedPages, ...need.pages])].filter(stale).slice(0, 420);
   for (const part of chunks(pagesTodo, 10)) {
     let j;
     try { j = await lp.call({ action: 'query', prop: 'revisions', rvprop: 'content', rvslots: 'main', redirects: '1', titles: part.join('|') }, 'lp-team-info'); } catch (e) { console.log('страницы команд:', e.message); break; }
@@ -167,7 +171,7 @@ async function main() {
   const titles = new Map(); // title → keys
   for (const [k, n] of missing) for (const t of [n, 'Team ' + n]) { const tt = t.trim(); if (tt) titles.set(tt, [...(titles.get(tt) || []), k]); }
   let looked = 0;
-  for (const part of chunks([...titles.keys()], 50).slice(0, 12)) {
+  for (const part of OFFLINE ? [] : chunks([...titles.keys()], 50).slice(0, 12)) {
     let j;
     try { j = await lp.call({ action: 'query', prop: 'revisions', rvprop: 'content', rvslots: 'main', rvsection: '0', redirects: '1', titles: part.join('|') }, 'lp-team-pages'); } catch (e) { console.log('страницы команд:', e.message); break; }
     const q = j.query || {};
@@ -185,7 +189,34 @@ async function main() {
     }
     looked += part.length;
   }
-  for (const [k] of missing) if (!idx.teams[k]?.file) idx.teams[k] = { miss: now };
+  // ranked teams whose page is named differently (sponsor names: «Betclic» → «Betclic Apogee Esports»):
+  // full-text search, the first result that is a team page with a logo (≤ 15 searches a run)
+  const rankedMissing = (read(path.join(OUT, 'rankings.json'))?.teams || []).slice(0, 150).map((t) => t[2])
+    .filter((n) => !/^ex-|^ex /i.test(n) && !teamKeys(n).some((k) => idx.teams[k]?.file) && !(idx.teams[teamKeys(n)[0]]?.searched > now - 30 * 86400000));
+  for (const n of OFFLINE ? [] : rankedMissing.slice(0, 15)) {
+    let j;
+    try { j = await lp.call({ action: 'query', list: 'search', srsearch: n + ' Counter-Strike team', srnamespace: '0', srlimit: '5', srprop: '' }, 'lp-team-search'); } catch (e) { console.log('поиск команд:', e.message); break; }
+    const cands = (j.query?.search || []).map((x) => x.title).filter((t) => !t.includes('/'));
+    let found = '';
+    if (cands.length) {
+      let jj;
+      try { jj = await lp.call({ action: 'query', prop: 'revisions', rvprop: 'content', rvslots: 'main', rvsection: '0', titles: cands.join('|') }, 'lp-team-search-pages'); } catch { jj = null; }
+      const pages = new Map((jj?.query?.pages || []).map((p) => [p.title, p.revisions?.[0]?.slots?.main?.content || '']));
+      for (const t of cands) {
+        const content = pages.get(t) || '';
+        if (!/\{\{\s*Infobox[ _]team/i.test(content)) continue;
+        const ib = parseInfobox(content.replace(/Infobox[ _]team/i, 'Infobox league'));
+        const nm = String(ib?.name || t).toLowerCase();
+        // accept only when the team's name contains the ranked name (or the other way round)
+        const a = teamKeys(n)[0], b = teamKeys(nm)[0] || '';
+        if (!(b.includes(a) || a.includes(b))) continue;
+        const file = [ib?.imagedark, ib?.imagedarkmode, ib?.image].map((x) => (x || '').replace(/^(File|Image):/i, '').trim()).find((x) => x && !DEFAULT.test(x));
+        if (file) { found = file; for (const k of teamKeys(n)) idx.teams[k] = { file }; console.log(`логотип найден поиском: ${n} → ${t}`); break; }
+      }
+    }
+    if (!found) for (const k of teamKeys(n)) idx.teams[k] = { ...(idx.teams[k] || {}), searched: now };
+  }
+  for (const [k] of missing) if (!idx.teams[k]?.file) idx.teams[k] = { ...(idx.teams[k] || {}), miss: now };
 
   // ---- tournament → icon file: the stored tournament pages first (no request), then the API ----
   const rawDir = path.join(HIST, 'raw');
@@ -210,7 +241,7 @@ async function main() {
       }
     }
   }
-  const tourTodo = [...tours].filter((p) => !idx.tours[p]?.file && !(idx.tours[p]?.miss > now - WEEK)).slice(0, 400);
+  const tourTodo = OFFLINE ? [] : [...tours].filter((p) => !idx.tours[p]?.file && !(idx.tours[p]?.miss > now - WEEK)).slice(0, 400);
   for (const part of chunks(tourTodo, 40)) {
     let j;
     try { j = await lp.call({ action: 'query', prop: 'revisions', rvprop: 'content', rvslots: 'main', rvsection: '0', redirects: '1', titles: part.join('|') }, 'lp-tour-icons'); } catch (e) { console.log('турниры:', e.message); break; }
@@ -258,7 +289,7 @@ async function main() {
     for (const x of v.f?.staff || []) if (x[4] && !staffOf.has(x[4])) staffOf.set(x[4], r < 0 ? 999 : r + 1);
   }
   const fromExtra = (t) => { const c = extra[t]; if (typeof c !== 'string') return ''; const m = /^\|\s*image\s*=\s*([^\n|]+)$/m.exec(c); return m ? m[1].replace(/^(File|Image):/i, '').trim() : ''; };
-  const pplTodo = [...new Set([...squadOf.keys(), ...[...staffOf.keys()].sort((a, b) => staffOf.get(a) - staffOf.get(b))])]
+  const pplTodo = OFFLINE ? [] : [...new Set([...squadOf.keys(), ...[...staffOf.keys()].sort((a, b) => staffOf.get(a) - staffOf.get(b))])]
     .filter((t) => !lpToSid.has(t) && !(staffOf.has(t) && !squadOf.has(t) && typeof extra[t] === 'string') && !(idx.ppl[t]?.at > now - 30 * 86400000)).slice(0, 800);
   for (const part of chunks(pplTodo, 50)) {
     let j;
@@ -307,7 +338,7 @@ async function main() {
 
   // ---- file → thumbnail URL ----
   for (const size of [64, 160]) {
-    const toResolve = queue.filter(([f, sz]) => sz === size && !idx.files[f]?.img && !idx.files[f]?.url && !(idx.files[f]?.miss > now - WEEK)).map(([f]) => f).slice(0, 2000);
+    const toResolve = OFFLINE ? [] : queue.filter(([f, sz]) => sz === size && !idx.files[f]?.img && !idx.files[f]?.url && !(idx.files[f]?.miss > now - WEEK)).map(([f]) => f).slice(0, 2000);
     for (const part of chunks(toResolve, 50)) {
       let j;
       const params = { action: 'query', prop: 'imageinfo', iiprop: 'url', iiurlwidth: String(size), iiurlheight: String(size), titles: part.map((f) => 'File:' + f).join('|') };
@@ -328,7 +359,7 @@ async function main() {
   }
 
   // ---- download thumbnails ----
-  const order = queue.map(([f]) => f).filter((f) => idx.files[f]?.url && !idx.files[f]?.img);
+  const order = OFFLINE ? [] : queue.map(([f]) => f).filter((f) => idx.files[f]?.url && !idx.files[f]?.img);
   let got = 0, fail = 0, waits = 0;
   // Liquipedia asks automated clients for ≤ 1 request per 2 s in total; on 429 back off a minute, give up after 3
   await sleep(5000);
