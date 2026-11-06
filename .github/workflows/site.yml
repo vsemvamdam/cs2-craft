@@ -86,3 +86,6 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          # ~240 MB and tens of thousands of files (maps, lineups, price history): syncing takes over 10 minutes
+          timeout: 1800000
