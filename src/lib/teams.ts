@@ -18,7 +18,7 @@ function loadLogos() {
   return fileP;
 }
 
-type LpFile = { t: Record<string, string>; e: Record<string, string>; p?: Record<string, string> };
+type LpFile = { t: Record<string, string>; e: Record<string, string>; p?: Record<string, string>; s?: Record<string, string> };
 let lpP: Promise<LpFile | null> | null = null;
 export function loadLpLogos() {
   if (!lpP) lpP = fetch(import.meta.env.BASE_URL + 'data/logos.json').then((r) => (r.ok ? r.json() : null)).catch(() => null);

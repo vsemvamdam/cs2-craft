@@ -14,7 +14,7 @@ import '../styles/team.css';
 type MatchRow = [number, string, number, number, [string, number, number][], string, string, string, number | null, number | null];
 type TeamFile = { name: string; page: string; m: MatchRow[]; titles: [number, string, string, string][] };
 type Person = { id: string; t: string; name: string; flag: string; role: string; igl: number; inactive: number; sid?: string; for?: string; tour?: string };
-type Info = { location?: string; region?: string; created?: string; disbanded?: string; staff?: [string, string, string?, string?][]; links?: Record<string, string>; squad?: Person[]; standins?: Person[] };
+type Info = { location?: string; region?: string; created?: string; disbanded?: string; staff?: [string, string, string?, string?, string?][]; links?: Record<string, string>; squad?: Person[]; standins?: Person[] };
 type Ranking = { date: string; teams: [number, number, string, string[], string, number, number][] };
 type PIndex = { cols: string[]; rows: (string | number)[][] };
 type PInfo = { lp?: string; id?: string; name?: string; rn?: string; c?: string; r?: string };
@@ -62,6 +62,7 @@ export default function Team({ slug }: { slug: string }) {
   const [links, setLinks] = useState<Record<string, PInfo>>({});
   const [avatars, setAvatars] = useState<Record<string, string>>({});
   const [photos, setPhotos] = useState<Record<string, string>>({});
+  const [staffPhotos, setStaffPhotos] = useState<Record<string, string>>({});
   const [es, setEs] = useState<EsMatch[]>([]);
   const [extra, setExtra] = useState<Record<string, PInfo & { team?: string }>>({});
   const logo = useTeamLogos();
@@ -76,7 +77,7 @@ export default function Team({ slug }: { slug: string }) {
     getJSON<PIndex>(DATA + 'players/index.json').then(setPix);
     getJSON<{ p: Record<string, PInfo> }>(DATA + 'players/links.json').then((x) => setLinks(x?.p || {}));
     getJSON<Record<string, string>>(DATA + 'players/avatars.json').then((x) => setAvatars(x || {}));
-    loadLpLogos().then((x) => setPhotos(x?.p || {}));
+    loadLpLogos().then((x) => { setPhotos(x?.p || {}); setStaffPhotos(x?.s || {}); });
     getJSON<{ matches: EsMatch[] }>(ESPORTS).then((x) => setEs(x?.matches || []));
     getJSON<Record<string, PInfo & { team?: string }>>(DATA + 'players/extra.json').then((x) => setExtra(x || {}));
   }, []);
@@ -151,9 +152,10 @@ export default function Team({ slug }: { slug: string }) {
           {inf.staff?.length ? (
             <section className="tm-card">
               <h3 className="tm-h">Тренерский штаб</h3>
-              {inf.staff.map(([n, role, real, flag]) => (
+              {inf.staff.map(([n, role, real, flag, pg]) => (
                 <div key={n + role} className="tm-staff">
-                  <span className="tm-ini" style={{ background: `hsl(${HUE(n)} 25% 26%)` }}>{n.slice(0, 2).toUpperCase()}</span>
+                  {pg && staffPhotos[pg] ? <img className="tm-staff-photo" src={import.meta.env.BASE_URL + 'data/logos/' + staffPhotos[pg]} alt={n} loading="lazy" />
+                    : <span className="tm-ini" style={{ background: `hsl(${HUE(n)} 25% 26%)` }}>{n.slice(0, 2).toUpperCase()}</span>}
                   <div className="stack" style={{ gap: 1, minWidth: 0 }}>
                     <span className="row" style={{ gap: 8 }}><b>{flag && flagUrl(flag) ? <img className="tm-flag" src={flagUrl(flag)} alt="" title={countryFromFlag(flag)} /> : null}{n}</b><span className="tm-chip">{role}</span></span>
                     {real ? <span className="tiny muted">{real}</span> : null}

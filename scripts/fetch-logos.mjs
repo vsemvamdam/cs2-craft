@@ -106,9 +106,14 @@ async function main() {
     if (created) f.created = [created[1], created[2] && created[2] !== '??' ? created[2] : '', created[3] && created[3] !== '??' ? created[3] : ''].filter(Boolean).join('-');
     if (ib.disbanded) f.disbanded = clean(ib.disbanded).slice(0, 10);
     for (const k of ['location', 'region']) if (ib[k]) f[k] = clean(ib[k]);
+    // staff: [shown name, role, real name, flag, Liquipedia page] — page from [[Page|Name]] links when present
     const staff = [];
     for (const k of ['coach', 'coaches', 'headcoach', 'assistantcoach', 'analyst', 'manager']) {
-      for (const x of clean(ib[k]).split(/\s*(?:<br\s*\/?>|,|\n)\s*/)) if (x && staff.length < 6) staff.push([x, k.includes('assistant') ? 'Ассистент' : k === 'analyst' ? 'Аналитик' : k === 'manager' ? 'Менеджер' : 'Тренер']);
+      const role = k.includes('assistant') ? 'Ассистент тренера' : k === 'analyst' ? 'Аналитик' : k === 'manager' ? 'Менеджер' : 'Тренер';
+      const raw = noRefs(ib[k] || '');
+      const linked = [...raw.matchAll(/\[\[([^|\]]+)(?:\|([^\]]+))?\]\]/g)].map((m) => [m[2] || m[1], m[1]]);
+      const list = linked.length ? linked : clean(raw).split(/\s*(?:<br\s*\/?>|,|\n)\s*/).filter(Boolean).map((x) => [x, x]);
+      for (const [shown, page] of list) if (shown && staff.length < 8) staff.push([shown.trim(), role, '', '', page.trim()]);
     }
     if (staff.length) f.staff = staff;
     const links = {};
@@ -147,7 +152,7 @@ async function main() {
       if (sq.squad.length) {
         f.squad = sq.squad;
         // coaches & analysts from the roster (with real names) replace the infobox list; the manager stays
-        const staff = sq.squad.filter((x) => x.role).map((x) => [x.id, /assist/i.test(x.role) ? 'Ассистент тренера' : /analyst/i.test(x.role) ? 'Аналитик' : /manager/i.test(x.role) ? 'Менеджер' : 'Тренер', x.name, x.flag]);
+        const staff = sq.squad.filter((x) => x.role).map((x) => [x.id, /assist/i.test(x.role) ? 'Ассистент тренера' : /analyst/i.test(x.role) ? 'Аналитик' : /manager/i.test(x.role) ? 'Менеджер' : 'Тренер', x.name, x.flag, x.t]);
         if (staff.length) f.staff = [...staff, ...(f.staff || []).filter(([, r]) => r === 'Менеджер')];
       }
       if (sq.standins.length) f.standins = sq.standins;
@@ -246,7 +251,15 @@ async function main() {
     const r = rankedPages.indexOf(pg);
     for (const x of [...(v.f?.squad || []), ...(v.f?.standins || [])]) if (x.t && !squadOf.has(x.t)) squadOf.set(x.t, [pg, r < 0 ? 999 : r + 1]);
   }
-  const pplTodo = [...squadOf.keys()].filter((t) => !lpToSid.has(t) && !(idx.ppl[t]?.at > now - 30 * 86400000)).slice(0, 600);
+  // coaches / managers / analysts of every team page (photo for the staff block)
+  const staffOf = new Map(); // person page → rank of the team
+  for (const [pg, v] of Object.entries(idx.pages)) {
+    const r = rankedPages.indexOf(pg);
+    for (const x of v.f?.staff || []) if (x[4] && !staffOf.has(x[4])) staffOf.set(x[4], r < 0 ? 999 : r + 1);
+  }
+  const fromExtra = (t) => { const c = extra[t]; if (typeof c !== 'string') return ''; const m = /^\|\s*image\s*=\s*([^\n|]+)$/m.exec(c); return m ? m[1].replace(/^(File|Image):/i, '').trim() : ''; };
+  const pplTodo = [...new Set([...squadOf.keys(), ...[...staffOf.keys()].sort((a, b) => staffOf.get(a) - staffOf.get(b))])]
+    .filter((t) => !lpToSid.has(t) && !(staffOf.has(t) && !squadOf.has(t) && typeof extra[t] === 'string') && !(idx.ppl[t]?.at > now - 30 * 86400000)).slice(0, 800);
   for (const part of chunks(pplTodo, 50)) {
     let j;
     try { j = await lp.call({ action: 'query', prop: 'revisions', rvprop: 'content', rvslots: 'main', rvsection: '0', redirects: '1', titles: part.join('|') }, 'lp-roster-players'); } catch (e) { console.log('игроки составов:', e.message); break; }
@@ -256,7 +269,7 @@ async function main() {
     for (const p of q.pages || []) {
       let req = p.title;
       for (let i = 0; i < 3 && back.has(req); i++) req = back.get(req);
-      const ib = templates(noRefs(p.revisions?.[0]?.slots?.main?.content || ''), 'Infobox player')[0];
+      const ib = templates(noRefs(p.revisions?.[0]?.slots?.main?.content || ''), 'Infobox (?:player|person|talent|staff|coach|manager)')[0];
       if (!ib) { idx.ppl[req] = { at: now }; continue; }
       const sid = (ib.steam64id || '').replace(/\D/g, '');
       const l = {};
@@ -267,10 +280,17 @@ async function main() {
       };
     }
   }
+  idx.staff = {}; // person page → photo file (coaches, managers)
   for (const [t, v] of Object.entries(idx.ppl)) {
-    if (!v.sid || !v.image || DEFAULT.test(v.image)) continue;
-    idx.players[v.sid] = { file: v.image };
-    photoRank.push([squadOf.get(t)?.[1] ?? 999, v.image]);
+    if (!v.image || DEFAULT.test(v.image)) continue;
+    if (v.sid) idx.players[v.sid] = { file: v.image };
+    if (staffOf.has(t)) idx.staff[t] = v.image;
+    if (v.sid || staffOf.has(t)) photoRank.push([Math.min(squadOf.get(t)?.[1] ?? 999, (staffOf.get(t) ?? 999) + 0.5), v.image]);
+  }
+  for (const [t, r] of staffOf) {
+    if (idx.staff[t]) continue;
+    const img = fromExtra(t) || (lpToSid.has(t) && idx.players[lpToSid.get(t)]?.file) || '';
+    if (img && !DEFAULT.test(img)) { idx.staff[t] = img; photoRank.push([r + 0.5, img]); }
   }
   photoRank.sort((a, b) => a[0] - b[0]);
 
@@ -349,8 +369,10 @@ async function main() {
   for (const [p, v] of Object.entries(idx.tours)) { const img = v.file && idx.files[v.file]?.img; if (img) { e[p] = img; used.add(img); } }
   const ph = {};
   for (const [sid, v] of Object.entries(idx.players || {})) { const img = v.file && idx.files[v.file]?.img; if (img) { ph[sid] = img; used.add(img); } }
+  const st = {};
+  for (const [t, f] of Object.entries(idx.staff || {})) { const img = idx.files[f]?.img; if (img) { st[t] = img; used.add(img); } }
   for (const img of used) fs.copyFileSync(path.join(STORE, 'img', img), path.join(outDir, img));
-  fs.writeFileSync(path.join(OUT, 'logos.json'), JSON.stringify({ src: 'Liquipedia', at: idx.at, t, e, p: ph }));
+  fs.writeFileSync(path.join(OUT, 'logos.json'), JSON.stringify({ src: 'Liquipedia', at: idx.at, t, e, p: ph, s: st }));
   // team infoboxes for the team pages
   const info = {};
   const sidOf = (t) => lpToSid.get(t) || idx.ppl[t]?.sid || '';
@@ -374,7 +396,7 @@ async function main() {
   if (fs.existsSync(path.join(OUT, 'players'))) fs.writeFileSync(path.join(OUT, 'players', 'extra.json'), JSON.stringify(extraOut));
   console.log(`составы: ${Object.values(info).filter((x) => x.squad).length} команд; игроков без демок с профилем: ${Object.keys(extraOut).length}`);
   if (fs.existsSync(path.join(OUT, 'teams'))) fs.writeFileSync(path.join(OUT, 'teams', 'info.json'), JSON.stringify(info));
-  console.log(`фото игроков: ${Object.keys(ph).length}, инфобоксов команд: ${Object.keys(info).length}`);
+  console.log(`фото игроков: ${Object.keys(ph).length}, тренеров и менеджеров: ${Object.keys(st).length}, инфобоксов команд: ${Object.keys(info).length}`);
   const haveWanted = [...want.keys()].filter((k) => t[k]).length;
   console.log(`логотипы: скачано ${got}${fail ? `, не удалось ${fail}` : ''}, в очереди ${Math.max(0, order.length - MAX_DL)}; у команд сайта: ${haveWanted}/${want.size} ключей, турниров с иконкой: ${[...tours].filter((p) => e[p]).length}/${tours.size}; запросов к API: ${lp.count}`);
 }
