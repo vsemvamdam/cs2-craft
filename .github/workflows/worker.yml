@@ -2,7 +2,7 @@ name: Сервер статистики (Cloudflare Worker)
 
 # Разворачивает worker/ (поиск профилей Steam, рейтинг, инвентарь) на Cloudflare Workers и
 # записывает его адрес в public/data/api.json — сайт берёт адрес оттуда.
-# Нужны секреты репозитория: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, STEAM_API_KEY
+# Нужны секреты репозитория: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, STEAM_API_KEY (и по желанию FACEIT_API_KEY)
 # (как их получить — README, раздел «Статистика Steam и CS2»). Без них workflow просто пропускается.
 on:
   push:
@@ -25,6 +25,7 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       STEAM_API_KEY: ${{ secrets.STEAM_API_KEY }}
+      FACEIT_API_KEY: ${{ secrets.FACEIT_API_KEY }}
       WRANGLER_SEND_METRICS: 'false'
     steps:
       - name: Проверить секреты
@@ -68,6 +69,8 @@ jobs:
           npx wrangler d1 execute cs2-craft-stats --remote --file=schema.sql
           npx wrangler deploy 2>&1 | tee deploy.log
           printf '%s' "$STEAM_API_KEY" | npx wrangler secret put STEAM_API_KEY
+          # optional: FACEIT block of the Statistics profile
+          if [ -n "$FACEIT_API_KEY" ]; then printf '%s' "$FACEIT_API_KEY" | npx wrangler secret put FACEIT_API_KEY; fi
           url=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' deploy.log | head -1)
           if [ -z "$url" ]; then echo "::error::Не нашёл адрес *.workers.dev — откройте в Cloudflare раздел Workers & Pages и выберите поддомен workers.dev"; exit 1; fi
           echo "url=$url" >> "$GITHUB_OUTPUT"

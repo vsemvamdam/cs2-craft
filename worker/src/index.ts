@@ -8,6 +8,8 @@
  *   GET /api/inventory?id=<steamid>        → CS2 inventory grouped by market name (cached 30 min)
  *   GET /api/ladder?by=xp|level|games|playtime|cs2|badges|age&country=RU&limit=50&offset=0
  *   GET /api/history?id=<steamid>          → daily snapshots [day, level, xp, games, playtime, cs2]
+ *   GET /api/faceit?id=<steamid>           → FACEIT profile of that Steam account: level, ELO, CS2 / CS:GO lifetime
+ *                                            stats, last 20 results (official FACEIT Data API, cached 10 min)
  *
  * Every profile that is looked up joins the ladder (D1 table `profiles`); the cron trigger refreshes the
  * stalest ones every 10 minutes, so levels and game counts stay current. The Steam Web API key is a Worker
@@ -16,6 +18,7 @@
 export interface Env {
   DB: D1Database;
   STEAM_API_KEY: string;
+  FACEIT_API_KEY?: string;
 }
 
 const API = 'https://api.steampowered.com';
@@ -225,6 +228,73 @@ async function inventory(env: Env, raw: string, ctx: ExecutionContext): Promise<
   return res;
 }
 
+// ---------------------------------------------------------------------------
+// FACEIT (official Data API, server key = Worker secret FACEIT_API_KEY)
+const FACEIT = 'https://open.faceit.com/data/v4';
+const FACEIT_TTL = 600;
+async function fc<T>(env: Env, path: string): Promise<T | null> {
+  const r = await fetch(FACEIT + path, { headers: { Authorization: `Bearer ${env.FACEIT_API_KEY}`, Accept: 'application/json' } });
+  if (r.status === 404) return null;
+  if (r.status === 429) throw new HttpError(503, 'FACEIT ограничил частоту запросов, попробуйте через минуту');
+  if (r.status === 401 || r.status === 403) throw new HttpError(503, 'Ключ FACEIT API не подходит');
+  if (!r.ok) throw new HttpError(502, `FACEIT API: ${r.status}`);
+  return (await r.json()) as T;
+}
+type FcGame = { faceit_elo?: number; skill_level?: number; region?: string; game_player_name?: string };
+type FcPlayer = { player_id: string; nickname: string; avatar?: string; country?: string; cover_image?: string; activated_at?: string; memberships?: string[]; verified?: boolean; faceit_url?: string; games?: Record<string, FcGame> };
+type FcStats = { lifetime?: Record<string, unknown>; segments?: { label: string; mode: string; type: string; stats: Record<string, string> }[] };
+type FcHistory = { items?: { match_id: string; finished_at?: number; started_at?: number; game_mode?: string; competition_name?: string; results?: { winner?: string; score?: Record<string, number> }; teams?: Record<string, { players?: { player_id: string }[] }> }[] };
+// lifetime keys we show (FACEIT sends them as strings; CS2 and CS:GO have different sets)
+const FC_KEYS = ['Matches', 'Wins', 'Win Rate %', 'Average K/D Ratio', 'Average Headshots %', 'ADR', 'Longest Win Streak', 'Current Win Streak',
+  'Recent Results', '1v1 Win Rate', '1v2 Win Rate', 'Entry Success Rate', 'Utility Damage per Round', 'Flash Success Rate', 'Sniper Kill Rate', 'Total Matches'];
+
+async function faceit(env: Env, raw: string, ctx: ExecutionContext): Promise<Response> {
+  if (!env.FACEIT_API_KEY) throw new HttpError(503, 'Ключ FACEIT API не настроен');
+  const steamid = await resolve(env, raw);
+  const cache = caches.default;
+  const key = new Request(`https://cache.cs2-craft/faceit/${steamid}`);
+  const hit = await cache.match(key);
+  if (hit) return new Response(hit.body, { headers: { ...Object.fromEntries(hit.headers), ...CORS, 'X-Cache': 'HIT' } });
+  // the same Steam account can be linked to CS2 and/or CS:GO on FACEIT
+  const p = (await fc<FcPlayer>(env, `/players?game=cs2&game_player_id=${steamid}`)) || (await fc<FcPlayer>(env, `/players?game=csgo&game_player_id=${steamid}`));
+  if (!p) {
+    const res = json({ steamid, found: false }, 200, FACEIT_TTL);
+    ctx.waitUntil(cache.put(key, res.clone()));
+    return res;
+  }
+  const games = ['cs2', 'csgo'].filter((g) => p.games?.[g]);
+  const [stats, hist] = await Promise.all([
+    Promise.all(games.map((g) => fc<FcStats>(env, `/players/${p.player_id}/stats/${g}`).catch(() => null))),
+    games.includes('cs2') ? fc<FcHistory>(env, `/players/${p.player_id}/history?game=cs2&limit=20`).catch(() => null) : Promise.resolve(null),
+  ]);
+  const out: Record<string, unknown> = {
+    steamid, found: true, id: p.player_id, nick: p.nickname, avatar: p.avatar || null, country: p.country || null,
+    url: (p.faceit_url || `https://www.faceit.com/{lang}/players/${p.nickname}`).replace('{lang}', 'ru'),
+    premium: (p.memberships || []).some((m) => m !== 'free'), verified: !!p.verified, created: p.activated_at || null,
+    games: {} as Record<string, unknown>,
+  };
+  games.forEach((g, i) => {
+    const gi = p.games![g];
+    const life = stats[i]?.lifetime || {};
+    const lt: Record<string, unknown> = {};
+    for (const k of FC_KEYS) if (life[k] != null && life[k] !== '') lt[k] = life[k];
+    // per-map results (5v5 only)
+    const maps = (stats[i]?.segments || []).filter((s) => s.type === 'Map' && /5v5/.test(s.mode)).map((s) => ({
+      map: s.label, m: +s.stats['Matches'] || 0, wr: +s.stats['Win Rate %'] || 0, kd: +s.stats['Average K/D Ratio'] || 0,
+    })).filter((x) => x.m > 0).sort((a, b) => b.m - a.m).slice(0, 10);
+    (out.games as Record<string, unknown>)[g] = { elo: gi.faceit_elo ?? null, level: gi.skill_level ?? null, region: gi.region || null, life: lt, maps };
+  });
+  if (hist?.items?.length) {
+    out.recent = hist.items.map((m) => {
+      const side = Object.entries(m.teams || {}).find(([, t]) => t.players?.some((x) => x.player_id === p.player_id))?.[0];
+      return { id: m.match_id, at: m.finished_at || m.started_at || null, win: side && m.results?.winner ? m.results.winner === side : null, mode: m.game_mode || '', comp: m.competition_name || '' };
+    });
+  }
+  const res = json(out, 200, FACEIT_TTL);
+  ctx.waitUntil(cache.put(key, res.clone()));
+  return res;
+}
+
 async function ladder(env: Env, url: URL): Promise<Response> {
   const by = LADDER[url.searchParams.get('by') || 'xp'] || LADDER.xp;
   const limit = Math.min(100, Math.max(1, +(url.searchParams.get('limit') || 50)));
@@ -271,7 +341,8 @@ export default {
     try {
       if (!env.STEAM_API_KEY && url.pathname !== '/api/health') throw new HttpError(503, 'Ключ Steam API не настроен');
       switch (url.pathname) {
-        case '/api/health': return json({ ok: true, key: !!env.STEAM_API_KEY });
+        case '/api/health': return json({ ok: true, key: !!env.STEAM_API_KEY, faceit: !!env.FACEIT_API_KEY });
+        case '/api/faceit': return await faceit(env, url.searchParams.get('id') || '', ctx);
         case '/api/profile': return await profile(env, url.searchParams.get('id') || '', ctx, url.searchParams.get('fresh') === '1');
         case '/api/inventory': return await inventory(env, url.searchParams.get('id') || '', ctx);
         case '/api/ladder': return await ladder(env, url);

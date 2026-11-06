@@ -241,6 +241,7 @@ function Overview({ d }: { d: Profile }) {
         <Kpi k="Значков" v={num(d.badges)} rank={r.badges} total={r.total} />
         <Kpi k="Достижений CS2" v={num(d.achievements)} />
       </div>
+      <FaceitBlock steamid={d.steamid} />
       {s && (
         <div className="card pad">
           <div className="row between" style={{ marginBottom: 12 }}><h3>CS2 коротко</h3><a className="link small" href={href(`/stats/${d.steamid}?tab=cs2`)}>Вся статистика →</a></div>
@@ -449,6 +450,123 @@ function CS2Stats({ d }: { d: Profile }) {
   );
 }
 
+// ---- FACEIT ------------------------------------------------------------------------
+type FcGame = { elo: number | null; level: number | null; region: string | null; life: Record<string, string | string[]>; maps: { map: string; m: number; wr: number; kd: number }[] };
+type Faceit = { found: boolean; nick?: string; avatar?: string | null; country?: string | null; url?: string; premium?: boolean; verified?: boolean; created?: string | null; games?: Record<string, FcGame>; recent?: { id: string; at: number | null; win: boolean | null }[] };
+const FC_COLOR = (lvl: number | null) => (!lvl ? '#888' : lvl === 1 ? '#eeeeee' : lvl <= 3 ? '#1ce400' : lvl <= 7 ? '#ffc800' : lvl <= 9 ? '#ff6309' : '#fe1f00');
+// ELO needed for each level (FACEIT CS2)
+const FC_LEVELS = [0, 100, 501, 751, 901, 1051, 1201, 1351, 1531, 1751, 2001];
+function FaceitLevel({ level, size = 56 }: { level: number | null; size?: number }) {
+  const c = FC_COLOR(level);
+  const f = (level || 0) / 10;
+  const R = 22, C = 2 * Math.PI * R, arc = 0.8; // open ring at the bottom, like FACEIT's badge
+  return (
+    <svg viewBox="0 0 56 56" width={size} height={size} className="fc-level" aria-label={`Уровень FACEIT ${level ?? '—'}`}>
+      <circle cx="28" cy="28" r="26" fill="#1b1d22" />
+      <circle cx="28" cy="28" r={R} fill="none" stroke="#3a3d45" strokeWidth="4" strokeDasharray={`${arc * C} ${C}`} transform="rotate(126 28 28)" strokeLinecap="round" />
+      <circle cx="28" cy="28" r={R} fill="none" stroke={c} strokeWidth="4" strokeDasharray={`${arc * C * f} ${C}`} transform="rotate(126 28 28)" strokeLinecap="round" />
+      <text x="28" y="34" textAnchor="middle" fill={c} fontSize="19" fontWeight="800" fontFamily="Inter, system-ui, sans-serif">{level ?? '?'}</text>
+    </svg>
+  );
+}
+const pct = (v: unknown) => (v == null || v === '' ? '—' : `${Math.round(+String(v))}%`);
+const dec = (v: unknown, n = 2) => (v == null || v === '' ? '—' : (+String(v)).toFixed(n));
+
+function FaceitBlock({ steamid }: { steamid: string }) {
+  const r = useAsync(() => api<Faceit>(`/api/faceit?id=${steamid}`).catch((e: Error) => ({ found: false, err: e.message }) as Faceit & { err: string }), [steamid]);
+  const [g, setG] = useState<string>('');
+  const d = r.data as (Faceit & { err?: string }) | null;
+  if (r.loading) return <div className="card pad fc-card"><span className="tiny muted">Загружаю FACEIT…</span></div>;
+  if (!d || d.err) return null; // server without a FACEIT key — no block at all
+  if (!d.found) return <div className="card pad fc-card row" style={{ gap: 10 }}><span className="fc-logo">FACEIT</span><span className="small muted">К этому Steam-аккаунту не привязан профиль FACEIT.</span></div>;
+  const games = Object.keys(d.games || {});
+  const cur = g && games.includes(g) ? g : games[0];
+  const x = d.games?.[cur];
+  const life = x?.life || {};
+  const recent: (boolean | null)[] = d.recent?.length && cur === 'cs2' ? d.recent.map((m) => m.win) : Array.isArray(life['Recent Results']) ? (life['Recent Results'] as string[]).map((v) => v === '1') : [];
+  const last = cur === 'cs2' ? d.recent?.find((m) => m.at)?.at : null;
+  const next = x?.level && x.level < 10 && x.elo != null ? FC_LEVELS[x.level + 1] - x.elo : null;
+  const lvlFrom = x?.level ? FC_LEVELS[x.level] : 0, lvlTo = x?.level && x.level < 10 ? FC_LEVELS[x.level + 1] : null;
+  const tiles: [string, string, string?][] = [
+    ['Винрейт', pct(life['Win Rate %']), life['Wins'] ? `${num(+String(life['Wins']))} побед` : undefined],
+    ['K/D', dec(life['Average K/D Ratio'])],
+    ['HS%', pct(life['Average Headshots %'])],
+    ['ADR', dec(life['ADR'], 1)],
+    ['Матчей', num(+String(life['Matches'] ?? life['Total Matches'] ?? 0) || null)],
+    ['Серия побед', life['Longest Win Streak'] ? String(life['Longest Win Streak']) : '—', life['Current Win Streak'] ? `сейчас ${life['Current Win Streak']}` : undefined],
+    ['Клатч 1v1', pct(life['1v1 Win Rate'] != null ? +String(life['1v1 Win Rate']) * (+String(life['1v1 Win Rate']) <= 1 ? 100 : 1) : null)],
+    ['Клатч 1v2', pct(life['1v2 Win Rate'] != null ? +String(life['1v2 Win Rate']) * (+String(life['1v2 Win Rate']) <= 1 ? 100 : 1) : null)],
+    ['Входы', pct(life['Entry Success Rate'] != null ? +String(life['Entry Success Rate']) * (+String(life['Entry Success Rate']) <= 1 ? 100 : 1) : null), 'успешных первых дуэлей'],
+    ['Урон гранатами', dec(life['Utility Damage per Round'], 1), 'за раунд'],
+  ];
+  return (
+    <div className="card fc-card">
+      <div className="fc-head">
+        <span className="fc-logo">FACEIT</span>
+        {games.length > 1 && (
+          <div className="seg">{games.map((k) => <button key={k} className={k === cur ? 'on' : ''} onClick={() => setG(k)}>{k === 'cs2' ? 'CS2' : 'CS:GO'}</button>)}</div>
+        )}
+        <a className="btn small ghost" href={d.url} target="_blank" rel="noreferrer">Профиль FACEIT ↗</a>
+      </div>
+      <div className="fc-body">
+        <div className="fc-id">
+          {d.avatar ? <img className="fc-ava" src={d.avatar} alt="" width={64} height={64} /> : <span className="fc-ava fc-ava0">{(d.nick || '?').slice(0, 2).toUpperCase()}</span>}
+          <div className="stack" style={{ gap: 4, minWidth: 0 }}>
+            <div className="row" style={{ gap: 8 }}>
+              <b className="fc-nick">{d.nick}</b>
+              {d.premium && <span className="fc-badge prem">Premium</span>}
+              {d.verified && <span className="fc-badge ver" title="Подтверждённый аккаунт">✓</span>}
+            </div>
+            <span className="tiny muted">
+              {d.country ? <>{flag(d.country.toUpperCase())} {d.country.toUpperCase()} · </> : null}
+              {x?.region ? `регион ${x.region} · ` : ''}
+              {d.created ? `на FACEIT с ${new Date(d.created).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })}` : ''}
+            </span>
+          </div>
+        </div>
+        <div className="fc-elo">
+          <FaceitLevel level={x?.level ?? null} />
+          <div className="stack" style={{ gap: 4, minWidth: 150 }}>
+            <span className="tiny muted">ELO</span>
+            <b className="fc-elo-v num" style={{ color: FC_COLOR(x?.level ?? null) }}>{x?.elo != null ? x.elo.toLocaleString('ru-RU') : '—'}</b>
+            {lvlTo && x?.elo != null ? (
+              <>
+                <div className="st-bar"><span style={{ width: `${Math.max(3, Math.min(100, ((x.elo - lvlFrom) / (lvlTo - lvlFrom)) * 100))}%`, background: FC_COLOR(x.level) }} /></div>
+                <span className="tiny faint">до {x.level! + 1} уровня — {next} ELO</span>
+              </>
+            ) : x?.level === 10 ? <span className="tiny faint">максимальный уровень</span> : null}
+          </div>
+        </div>
+      </div>
+      <div className="fc-tiles">
+        {tiles.filter(([, v]) => v !== '—').map(([k, v, sub]) => <div key={k} className="fc-tile"><span className="tiny muted">{k}</span><b className="num">{v}</b>{sub && <span className="tiny faint">{sub}</span>}</div>)}
+      </div>
+      {(recent.length > 0 || last) && (
+        <div className="fc-foot">
+          {recent.length > 0 && (
+            <div className="row" style={{ gap: 6 }}>
+              <span className="tiny muted">Последние матчи</span>
+              <span className="fc-recent">{recent.slice(0, 20).map((w, i) => <span key={i} className={w == null ? '' : w ? 'w' : 'l'}>{w == null ? '·' : w ? 'W' : 'L'}</span>)}</span>
+            </div>
+          )}
+          {last ? <span className="tiny muted">последний матч {new Date(last * 1000).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</span> : null}
+        </div>
+      )}
+      {x?.maps?.length ? (
+        <div className="fc-maps">
+          {x.maps.map((m) => (
+            <div key={m.map} className="fc-map" title={`${m.map}: ${m.m} матчей, винрейт ${m.wr}%, K/D ${m.kd.toFixed(2)}`}>
+              <span className="small">{m.map.replace(/^de_/, '').replace(/^\w/, (c) => c.toUpperCase())}</span>
+              <div className="st-bar thin"><span style={{ width: `${m.wr}%`, background: m.wr >= 50 ? 'var(--good)' : 'var(--bad)' }} /></div>
+              <span className="tiny muted num">{m.wr}% · {m.m}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 // ---- showcase: coins, medals, pins and trophies from the inventory -------------
 function Showcase({ steamid }: { steamid: string }) {
   const inv = useAsync(() => api<Inventory>(`/api/inventory?id=${steamid}`).catch(() => null), [steamid]);
@@ -488,7 +606,7 @@ function WeaponStrip({ s }: { s: Record<string, number> }) {
   const max = list[0].k;
   return (
     <div className="card st-wstrip">
-      <div className="st-wstrip-label"><span>Оружие</span><span>Убийства</span></div>
+      <div className="st-wstrip-label"><span>Убийства</span><span>Оружие</span></div>
       <div className="st-wstrip-row">
         {list.map((w) => (
           <div key={w.key} className="st-wcell" title={`${w.name}: ${w.k.toLocaleString('ru-RU')} убийств${w.shots ? ` · точность ${Math.round((w.hits / w.shots) * 100)}%` : ''}`}>
