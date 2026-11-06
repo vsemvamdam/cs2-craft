@@ -23,7 +23,10 @@ type EsMatch = { id: string; t1: EsTeam; t2: EsTeam; start: number; status: stri
 const DATA = import.meta.env.BASE_URL + 'data/';
 const getJSON = <T,>(u: string): Promise<T | null> => fetch(u).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 const ESPORTS = 'https://raw.githubusercontent.com/vsemvamdam/cs2-craft/esports-data/esports.json';
-const REGION_RU: Record<string, string> = { Europe: 'Европа', 'North America': 'Северная Америка', 'South America': 'Южная Америка', Americas: 'Америка', Asia: 'Азия', 'Asia-Pacific': 'Азия и Океания', Oceania: 'Океания', CIS: 'СНГ', 'Middle East': 'Ближний Восток', Africa: 'Африка', China: 'Китай', EU: 'Европа', AM: 'Америка', AS: 'Азия' };
+const regionRu = (r?: string) => (r ? REGION_RU[r] || REGION_RU[r.toLowerCase()] || r : '');
+const REGION_RU: Record<string, string> = {
+  eu: 'Европа', europe: 'Европа', na: 'Северная Америка', sa: 'Южная Америка', am: 'Америка', americas: 'Америка', asia: 'Азия', as: 'Азия',
+  oce: 'Океания', oceania: 'Океания', cis: 'СНГ', me: 'Ближний Восток', mena: 'Ближний Восток', af: 'Африка', africa: 'Африка', cn: 'Китай', china: 'Китай', apac: 'Азия и Океания', Europe: 'Европа', 'North America': 'Северная Америка', 'South America': 'Южная Америка', Americas: 'Америка', Asia: 'Азия', 'Asia-Pacific': 'Азия и Океания', Oceania: 'Океания', CIS: 'СНГ', 'Middle East': 'Ближний Восток', Africa: 'Африка', China: 'Китай', EU: 'Европа', AM: 'Америка', AS: 'Азия' };
 const LINK_RU: [string, string, (v: string) => string][] = [
   ['website', 'Сайт', (v) => (/^https?:/.test(v) ? v : 'https://' + v)],
   ['twitter', 'X', (v) => `https://x.com/${v.replace(/^@/, '')}`],
@@ -114,7 +117,7 @@ export default function Team({ slug }: { slug: string }) {
           <h1 className="tm-name">{name}</h1>
           <div className="tm-meta">
             {inf.location && <span>{flagUrl(inf.location) && <img className="tm-flag" src={flagUrl(inf.location)} alt="" />}{countryRu(inf.location)}</span>}
-            {(inf.region || ranked?.[4]) && <span>Регион {REGION_RU[inf.region || ranked![4]] || inf.region}</span>}
+            {(inf.region || ranked?.[4]) && <span>Регион {regionRu(inf.region || ranked![4])}</span>}
             {inf.created && <span>Основана {dateRu(inf.created)}</span>}
             {inf.disbanded && <span className="bad">Распущена {inf.disbanded}</span>}
           </div>
@@ -127,7 +130,7 @@ export default function Team({ slug }: { slug: string }) {
       </div>
 
       <div className="tm-kpis">
-        {ranked && <Kpi v={`#${ranked[0]}`} k="в мировом рейтинге Valve" sub={`${ranked[1].toLocaleString('ru-RU')} очков · ${REGION_RU[ranked[4]] || ranked[4]} #${ranked[5]}`} accent />}
+        {ranked && <Kpi v={`#${ranked[0]}`} k="в мировом рейтинге Valve" sub={`${ranked[1].toLocaleString('ru-RU')} очков · ${regionRu(ranked[4])} #${ranked[5]}`} accent />}
         <Kpi v={String(titlesYear)} k="титулов за год" sub={`всего с 2021: ${T.titles.length}`} />
         <Kpi v={String(mapsYear.length)} k="карт за год" sub={`${year.length} матчей`} />
         <Kpi v={`${mw}–${ml}`} k="победы · поражения" sub="по картам за год" />
@@ -159,7 +162,7 @@ export default function Team({ slug }: { slug: string }) {
             <h3 className="tm-h">Информация</h3>
             <dl className="tm-dl">
               {inf.created && <><dt>Основана</dt><dd>{dateRu(inf.created)}</dd></>}
-              {(inf.region || ranked?.[4]) && <><dt>Регион</dt><dd>{REGION_RU[inf.region || ranked![4]] || inf.region}</dd></>}
+              {(inf.region || ranked?.[4]) && <><dt>Регион</dt><dd>{regionRu(inf.region || ranked![4])}</dd></>}
               {inf.location && <><dt>База</dt><dd>{countryRu(inf.location)}</dd></>}
               <dt>Первый матч в базе</dt><dd>{fmtD(T.m[T.m.length - 1][0])}</dd>
               <dt>Последний матч</dt><dd>{fmtD(T.m[0][0])}</dd>
