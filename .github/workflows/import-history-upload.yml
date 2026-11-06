@@ -1,0 +1,40 @@
+name: Импорт истории цен (ветка history-upload)
+
+# Ветка history-upload содержит только файл cs2-history.json.gz (собран дома scripts/collect-history.mjs)
+# и этот workflow: пуш в ветку сам импортирует историю в хранилище и пересобирает сайт.
+on:
+  push:
+    branches: [history-upload]
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: history
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Файл с историей из ветки
+        run: |
+          git fetch --depth 1 origin history-upload
+          git show FETCH_HEAD:cs2-history.json.gz > cs2-history.json.gz
+          ls -la cs2-history.json.gz
+      - name: Импорт
+        run: |
+          scripts/store.sh pull history
+          node scripts/import-history.mjs cs2-history.json.gz
+          scripts/store.sh push history
+          gh workflow run site.yml -f quick=true
