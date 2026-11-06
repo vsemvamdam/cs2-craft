@@ -10,7 +10,7 @@
 //     looked up by page title (infobox image / imagedark, 50 pages per request);
 //   * tournament → icon file: the «icon» / «icondark» field of its infobox (40 pages per request);
 //   * file → small thumbnail URL: prop=imageinfo&iiurlwidth (50 files per request).
-// Thumbnails are downloaded once, politely (one at a time, ≥1 s apart, User-Agent with the repository as contact)
+// Thumbnails are downloaded once, politely (one at a time, ≥2 s apart, User-Agent with the repository as contact)
 // and kept in the «logos» store, so later runs only fetch logos of new teams. Teams that get no logo are retried
 // after a week. Liquipedia text is CC BY-SA 3.0; logos belong to their teams and organisers and are shown only
 // to identify them.
@@ -36,7 +36,7 @@ const arg = (n, d) => { const i = argv.indexOf('--' + n); return i >= 0 ? argv[i
 const STORE = arg('store', 'store/logos');
 const HIST = arg('hist', 'store/matches-hist');
 const OUT = arg('out', 'public/data');
-const MAX_DL = +(process.env.LOGOS_MAX_DOWNLOADS || 500);
+const MAX_DL = +(process.env.LOGOS_MAX_DOWNLOADS || 300);
 const REPO = process.env.GITHUB_REPOSITORY || 'vsemvamdam/cs2-craft';
 const WEEK = 7 * 86400000;
 
@@ -234,7 +234,12 @@ async function main() {
     const toResolve = queue.filter(([f, sz]) => sz === size && !idx.files[f]?.img && !idx.files[f]?.url && !(idx.files[f]?.miss > now - WEEK)).map(([f]) => f).slice(0, 2000);
     for (const part of chunks(toResolve, 50)) {
       let j;
-      try { j = await lp.call({ action: 'query', prop: 'imageinfo', iiprop: 'url', iiurlwidth: String(size), iiurlheight: String(size), titles: part.map((f) => 'File:' + f).join('|') }, 'lp-imageinfo'); } catch (e) { console.log('imageinfo:', e.message); break; }
+      const params = { action: 'query', prop: 'imageinfo', iiprop: 'url', iiurlwidth: String(size), iiurlheight: String(size), titles: part.map((f) => 'File:' + f).join('|') };
+      try { j = await lp.call(params, 'lp-imageinfo'); } catch (e) {
+        console.log('imageinfo:', e.message, '— повтор через 30 с');
+        await sleep(30000);
+        try { j = await lp.call(params, 'lp-imageinfo'); } catch (e2) { console.log('imageinfo:', e2.message); break; }
+      }
       const q = j.query || {};
       const back = new Map();
       for (const x of q.normalized || []) back.set(x.to, x.from);
@@ -248,10 +253,18 @@ async function main() {
 
   // ---- download thumbnails ----
   const order = queue.map(([f]) => f).filter((f) => idx.files[f]?.url && !idx.files[f]?.img);
-  let got = 0, fail = 0;
+  let got = 0, fail = 0, waits = 0;
+  // Liquipedia asks automated clients for ≤ 1 request per 2 s in total; on 429 back off a minute, give up after 3
+  await sleep(5000);
   for (const f of order.slice(0, MAX_DL)) {
     try {
-      const r = await fetch(idx.files[f].url, { headers: { 'User-Agent': UA, Accept: 'image/*' }, signal: AbortSignal.timeout(30000) });
+      let r = await fetch(idx.files[f].url, { headers: { 'User-Agent': UA, Accept: 'image/*' }, signal: AbortSignal.timeout(30000) });
+      while (r.status === 429 && waits < 3) {
+        waits++;
+        console.log(`Liquipedia просит подождать (${waits}/3) — пауза 60 с`);
+        await sleep(60000);
+        r = await fetch(idx.files[f].url, { headers: { 'User-Agent': UA, Accept: 'image/*' }, signal: AbortSignal.timeout(30000) });
+      }
       if (r.status === 429) { console.log('Liquipedia просит подождать — остальное в следующий раз'); break; }
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const buf = Buffer.from(await r.arrayBuffer());
@@ -264,7 +277,7 @@ async function main() {
       fail++;
       idx.files[f] = { url: idx.files[f].url, err: String(e.message).slice(0, 60), miss: now };
     }
-    await sleep(1100);
+    await sleep(2200);
   }
 
   idx.at = new Date().toISOString();
