@@ -21,6 +21,7 @@ import { dedup, prune, weld, join, simplify, quantize, transformMesh } from '@gl
 import { MeshoptEncoder, MeshoptSimplifier } from 'meshoptimizer';
 import sharp from 'sharp';
 import { PNG } from 'pngjs';
+import jpeg from 'jpeg-js';
 
 const argv = process.argv.slice(2);
 const opt = (k, d) => { const i = argv.indexOf('--' + k); return i >= 0 ? argv[i + 1] : d; };
@@ -28,6 +29,7 @@ const [SRC, OUT] = argv.filter((a, i) => !a.startsWith('--') && !argv[i - 1]?.st
 if (!SRC || !OUT) { console.error('usage: node build_textured.mjs export/de_mirage.gltf out/de_mirage.glb'); process.exit(1); }
 const TEX = +opt('tex', 512);
 const SIMPLIFY = +opt('simplify', 0.0004);
+const JS_TEX = +opt('js-tex', 384); // texture size when sharp is unavailable
 const MAX_TRIS = +opt('max-tris', 1_000_000); // heavy maps (Ancient: 9M) are simplified down to this budget
 const INCH = 1 / 0.0254; // Source 2 Viewer writes metres
 
@@ -155,7 +157,7 @@ console.log('bounds (three units = Source inches):', b.min.map(Math.round), b.ma
 
 // textures → WebP ≤TEX px. 16-bit PNGs (some maps have them) crash libvips' colour conversion on Windows,
 // so anything that is not plain 8-bit goes through pngjs (rescales to 8-bit RGBA) first.
-let webp = 0, viaPng = 0, droppedTex = 0;
+let webp = 0, js = 0, droppedTex = 0;
 /** pngjs keeps 16-bit samples (Uint16Array, or big-endian byte pairs) — take the high byte of each */
 const rgba8 = (png) => {
   const n = png.width * png.height * 4, d = png.data;
@@ -165,32 +167,71 @@ const rgba8 = (png) => {
   else for (let i = 0; i < n; i++) o[i] = d[i * 2];
   return o;
 };
+/** area-average downscale of RGBA8 so the longer side is ≤ max */
+function shrinkRGBA(src, w, h, max) {
+  const k = Math.max(1, Math.max(w, h) / max);
+  if (k === 1) return { data: src, w, h };
+  const W = Math.max(1, Math.round(w / k)), H = Math.max(1, Math.round(h / k));
+  const out = Buffer.alloc(W * H * 4);
+  for (let y = 0; y < H; y++) {
+    const y0 = Math.floor(y * h / H), y1 = Math.max(y0 + 1, Math.floor((y + 1) * h / H));
+    for (let x = 0; x < W; x++) {
+      const x0 = Math.floor(x * w / W), x1 = Math.max(x0 + 1, Math.floor((x + 1) * w / W));
+      let r = 0, g = 0, b = 0, a = 0, n = 0;
+      for (let yy = y0; yy < y1; yy++) for (let xx = x0, i = (yy * w + x0) * 4; xx < x1; xx++, i += 4) { r += src[i]; g += src[i + 1]; b += src[i + 2]; a += src[i + 3]; n++; }
+      const o = (y * W + x) * 4;
+      out[o] = r / n; out[o + 1] = g / n; out[o + 2] = b / n; out[o + 3] = a / n;
+    }
+  }
+  return { data: out, w: W, h: H };
+}
+/** pure-JS path (no native libraries): PNG → ≤TEX px → JPEG, or PNG when the texture has transparency */
+function jsTexture(buf, needAlpha) {
+  const png = PNG.sync.read(buf);
+  const { data, w, h } = shrinkRGBA(rgba8(png), png.width, png.height, Math.min(TEX, JS_TEX)); // JPEG is ~3× bigger than WebP
+  // CS2 colour textures often keep a service channel in alpha: PNG only for really transparent materials
+  let alpha = false;
+  if (needAlpha) for (let i = 3; i < data.length; i += 4) if (data[i] < 250) { alpha = true; break; }
+  if (alpha) {
+    const o = new PNG({ width: w, height: h });
+    data.copy(o.data);
+    return { bytes: PNG.sync.write(o, { colorType: 6, deflateLevel: 9 }), mime: 'image/png', ext: '.png' };
+  }
+  return { bytes: jpeg.encode({ data, width: w, height: h }, 74).data, mime: 'image/jpeg', ext: '.jpg' };
+}
+// sharp (libvips) is fast and makes WebP, but on some Windows machines it loads a wrong libvips and fails on
+// every image — test it once and use the pure-JS path if it does not work
+let useSharp = !process.argv.includes('--no-sharp');
+if (useSharp) {
+  try { await sharp(Buffer.alloc(64, 128), { raw: { width: 4, height: 4, channels: 4 } }).resize(2, 2).webp().toBuffer(); }
+  catch { useSharp = false; console.log('sharp не работает на этом компьютере — текстуры через JS (JPEG/PNG)'); }
+}
 const toWebp = (img) => img.resize(TEX, TEX, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 80, alphaQuality: 90, effort: 4 }).toBuffer();
 for (const tex of root.listTextures()) {
   const src = Buffer.from(tex.getImage() || []);
-  let out = null;
-  try {
-    const meta = await sharp(src).metadata();
-    if (meta.depth === 'uchar') out = await toWebp(sharp(src));
-  } catch { /* fall through to pngjs */ }
-  if (!out) {
+  let res = null;
+  if (useSharp) {
     try {
-      const png = PNG.sync.read(src);
-      out = await toWebp(sharp(rgba8(png), { raw: { width: png.width, height: png.height, channels: 4 } }));
-      viaPng++;
-    } catch { /* unreadable */ }
+      const meta = await sharp(src).metadata();
+      const img = meta.depth === 'uchar' ? sharp(src) : (() => { const png = PNG.sync.read(src); return sharp(rgba8(png), { raw: { width: png.width, height: png.height, channels: 4 } }); })();
+      res = { bytes: await toWebp(img), mime: 'image/webp', ext: '.webp' };
+      webp++;
+    } catch { /* try the JS path */ }
   }
-  if (!out) {
+  if (!res) {
+    const needAlpha = tex.listParents().some((m) => m.propertyType === 'Material' && m.getAlphaMode() !== 'OPAQUE');
+    try { res = jsTexture(src, needAlpha); js++; } catch { /* unreadable */ }
+  }
+  if (!res) {
     for (const parent of tex.listParents()) if (parent.propertyType === 'Material') parent.setBaseColorTexture(null).setBaseColorFactor([0.62, 0.56, 0.48, 1]);
     tex.dispose();
     droppedTex++;
     continue;
   }
-  tex.setImage(new Uint8Array(out)).setMimeType('image/webp').setURI((tex.getURI() || 'tex').replace(/\.[a-z0-9]+$/i, '') + '.webp');
-  webp++;
+  tex.setImage(new Uint8Array(res.bytes)).setMimeType(res.mime).setURI((tex.getURI() || 'tex').replace(/\.[a-z0-9]+$/i, '') + res.ext);
 }
-doc.createExtension(EXTTextureWebP).setRequired(true);
-console.log(`textures: ${webp} WebP${viaPng ? ` (${viaPng} via 16-bit converter)` : ''}${droppedTex ? `, ${droppedTex} unreadable dropped` : ''}`);
+if (webp) doc.createExtension(EXTTextureWebP).setRequired(true);
+console.log(`textures: ${webp} WebP, ${js} JPEG/PNG${droppedTex ? `, ${droppedTex} unreadable dropped` : ''}`);
 await doc.transform(quantize({ quantizePosition: 16, quantizeTexcoord: 14, quantizeColor: 8, quantizeNormal: 8 }));
 doc.createExtension(EXTMeshoptCompression).setRequired(true).setEncoderOptions({ method: EXTMeshoptCompression.EncoderMethod.QUANTIZE });
 await io.write(OUT, doc);
