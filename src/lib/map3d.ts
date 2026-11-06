@@ -138,7 +138,7 @@ export function landPoint(th: Throw) {
 
 // ---- textured maps (real CS2 geometry + textures from the game files, tools/maps3d/build_textured.mjs) ----
 /** maps that have a textured .glb next to the collision mesh */
-export const TEXTURED_MAPS = new Set(['de_mirage']);
+export const TEXTURED_MAPS = new Set(['de_mirage', 'de_inferno', 'de_nuke', 'de_ancient', 'de_anubis', 'de_dust2', 'de_cache']);
 const texCache = new Map<string, Promise<THREE.Group>>();
 
 /** loads public/maps3d/<map>.glb (meshopt-compressed, already in three/Source units); shared between replays */
@@ -166,7 +166,8 @@ export function loadTexturedMap(map: string, onProgress?: (share: number) => voi
           name: src.name,
           map: src.map,
           color: src.color,
-          vertexColors: !!mesh.geometry.getAttribute('color'),
+          // foliage keeps wind/AO data in vertex colours (renders blue/magenta) — use them only on solid props
+          vertexColors: !cutout && !decal && !!mesh.geometry.getAttribute('color'),
           transparent: src.transparent,
           alphaTest: src.alphaTest,
           side: cutout ? THREE.DoubleSide : THREE.FrontSide,
@@ -174,13 +175,21 @@ export function loadTexturedMap(map: string, onProgress?: (share: number) => voi
           polygonOffset: decal,
           polygonOffsetFactor: decal ? -2 : 0,
           polygonOffsetUnits: decal ? -2 : 0,
-          emissiveMap: src.emissiveMap,
-          emissive: src.emissiveMap ? new THREE.Color(0xffffff) : new THREE.Color(0x000000),
+          // self-illumination masks are often a white placeholder in the export (whole floors glowed) — skip them
         });
         if (mat.map) { mat.map.anisotropy = 8; mat.map.colorSpace = THREE.SRGBColorSpace; }
+        else if (/water/.test(name)) {
+          // water has no colour texture in the export (it is a shader): murky, slightly transparent
+          mat.color.set(0x3f5f55);
+          mat.transparent = true;
+          mat.opacity = 0.82;
+          mat.depthWrite = false;
+          mesh.renderOrder = 2;
+        } else if (mat.color.r > 0.95 && mat.color.g > 0.95 && mat.color.b > 0.95) mat.color.set(0x8a8580); // untextured white → neutral
+        src.emissiveMap?.dispose();
         src.dispose();
         mesh.material = mat;
-        mesh.renderOrder = decal ? 1 : 0;
+        mesh.renderOrder = mesh.renderOrder === 2 ? 2 : decal ? 1 : 0;
         mesh.matrixAutoUpdate = false;
         mesh.updateMatrix();
       });
