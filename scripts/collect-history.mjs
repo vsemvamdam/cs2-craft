@@ -2,15 +2,16 @@
 // Сбор полной истории цен Steam Market с обычного домашнего подключения.
 // Steam отвечает 429 на все запросы истории с серверов GitHub, поэтому этот шаг делается на своём компьютере.
 // Вход в Steam не нужен: история берётся со страницы предмета на торговой площадке (тот же график, что видят все).
-// С ноября 2026 Steam по умолчанию показывает гостям бету нового маркета (без графика в странице) — скрипт
-// отправляет ту же настройку, что ставит кнопка «Выйти из бета-теста торговой площадки» (cookie bMarketOptOut=1).
 //
-//   node collect-history.mjs                 # 600 самых продаваемых скинов, ~45 минут
-//   node collect-history.mjs --limit 1500    # больше предметов — дольше (≈4 с на предмет)
+// С ноября 2026 Steam показывает гостям новый маркет. Его страница предмета несёт историю цен в своём блоке
+// данных (valve-ssr-data → запросы ["market","pricehistory",730,<название>]) — сразу для всех износов и StatTrak
+// этого скина, поэтому одна страница закрывает до 10 предметов списка. Старая страница (var line1) тоже понимается.
+//
+//   node collect-history.mjs                 # 600 самых продаваемых скинов
+//   node collect-history.mjs --limit 2000    # больше предметов (уже собранные пропускаются)
 //
 // Нужен только Node.js 18+. Результат — файл cs2-history.json.gz рядом со скриптом; его можно прервать
-// (Ctrl+C) и запустить снова — продолжит с места остановки. Готовый файл перетащите в чат (или загрузите
-// в релиз репозитория), сайт импортирует его в историю цен.
+// (Ctrl+C) и запустить снова — продолжит с места остановки.
 
 import fs from 'node:fs';
 import zlib from 'node:zlib';
@@ -19,7 +20,7 @@ const args = process.argv.slice(2);
 const opt = (k, d) => { const i = args.indexOf('--' + k); return i >= 0 ? args[i + 1] : d; };
 const LIMIT = +opt('limit', 600);
 let DELAY = +opt('delay', 5000);
-const TIMEOUT = +opt('timeout', 25000);
+const TIMEOUT = +opt('timeout', 40000);
 const OUT = opt('out', 'cs2-history.json.gz');
 const SITE = 'https://vsemvamdam.github.io/cs2-craft/data/history-targets.json';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -37,47 +38,49 @@ function save(db) {
 /** what is still to fetch: everything without a price history, except items Steam says don't exist (404) */
 const pending = (it) => !it || !(it.p?.length || it.err === 404);
 
-// Like a browser: keep the cookies Steam hands out (session, country, browser id) and send them back, plus the
-// «leave the market beta» preference — the old listing page has the price chart (var line1) in the HTML.
-// Since Nov 6 2026 the preference alone is not enough, Steam wants it together with its own visitor cookies.
-const jar = new Map([['bMarketOptOut', '1']]);
-const cookieHeader = () => [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
-function absorb(r) {
-  for (const c of r.headers.getSetCookie?.() || []) {
-    const kv = c.split(';')[0], i = kv.indexOf('=');
-    if (i > 0) jar.set(kv.slice(0, i).trim(), kv.slice(i + 1).trim());
-  }
-  jar.set('bMarketOptOut', '1');
-}
 const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) cs2-craft history',
   Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
   'Accept-Language': 'en-US,en;q=0.9',
 };
-/** GET with manual redirects, so cookies set on the way are kept; returns the final response (+ .finalUrl) */
-async function get(url, hops = 5) {
-  let u = url;
-  for (let i = 0; i <= hops; i++) {
-    const r = await fetch(u, { signal: AbortSignal.timeout(TIMEOUT), redirect: 'manual', headers: { ...HEADERS, Cookie: cookieHeader() } });
-    absorb(r);
-    const loc = r.headers.get('location');
-    if (r.status >= 300 && r.status < 400 && loc) { u = new URL(loc, u).href; continue; }
-    r.finalUrl = u;
-    return r;
+const get = (url) => fetch(url, { signal: AbortSignal.timeout(TIMEOUT), headers: HEADERS });
+
+// Steam currency codes → the prefix|suffix the importer understands (scripts/lib/steam-history.mjs currencyOf)
+const CUR = { 1: '$|', 2: '£|', 3: '|€', 5: '|pуб.', 23: '¥|' };
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** unix seconds → the old chart's date string «Feb 21 2014 01: +0» (what the importer parses) */
+const steamDate = (t) => { const d = new Date(t * 1000); return `${MON[d.getUTCMonth()]} ${String(d.getUTCDate()).padStart(2, '0')} ${d.getUTCFullYear()} ${String(d.getUTCHours()).padStart(2, '0')}: +0`; };
+
+/** new market page → { market_hash_name: { cur, p: [[date, price, volume]] } } for every variant on the page */
+function parseNewMarket(html) {
+  const m = html.match(/<script[^>]*id="valve-ssr-data"[^>]*>([\s\S]*?)<\/script>/);
+  if (!m) return null;
+  let q;
+  try { q = JSON.parse(JSON.parse(m[1]).renderContext?.queryData || '{}'); } catch { return null; }
+  const out = {};
+  for (const x of q.queries || []) {
+    const k = x.queryKey, d = x.state?.data;
+    if (!Array.isArray(k) || k[0] !== 'market' || k[1] !== 'pricehistory' || k[2] !== 730 || !d?.prices?.length) continue;
+    out[k[3]] = { cur: CUR[d.ecurrency] || `?${d.ecurrency}`, p: d.prices.map((r) => [steamDate(r.time), Math.round(r.price_median * 1000) / 1000, String(r.purchases)]) };
   }
-  throw new Error('слишком много переадресаций');
+  return out;
 }
-/** visit the market home page like a browser does — Steam sets its visitor cookies there */
-async function warmUp() {
-  try { const r = await get('https://steamcommunity.com/market/'); await r.text(); } catch { /* the item requests will report errors */ }
+/** old market page → { cur, p } for the one item */
+function parseOldMarket(html) {
+  const m = html.match(/var line1=(\[.*?\]);/s);
+  if (!m) return null;
+  const pre = (html.match(/var strFormatPrefix = "([^"]*)"/) || [])[1] || '';
+  const suf = (html.match(/var strFormatSuffix = "([^"]*)"/) || [])[1] || '';
+  try { const p = JSON.parse(m[1]); return p.length ? { cur: `${pre}|${suf}`, p } : null; } catch { return null; }
 }
 
 async function main() {
   console.log('Загружаю список самых продаваемых скинов…');
   const targets = (await (await fetch(SITE, { signal: AbortSignal.timeout(TIMEOUT) })).json()).names.slice(0, LIMIT);
   const db = load();
-  const todo = targets.filter((n) => pending(db.items[n]));
-  console.log(`Всего ${targets.length}, уже собрано ${targets.length - todo.length}, осталось ${todo.length} (≈${mmss(todo.length * (DELAY + 700))}).`);
+  for (const it of Object.values(db.items)) delete it.tried; // leftovers of an interrupted run
+  let todo = targets.filter((n) => pending(db.items[n]));
+  console.log(`Всего ${targets.length}, уже собрано ${targets.length - todo.length}, осталось ${todo.length}. Одна страница даёт сразу все износы скина, так что запросов будет меньше.`);
   if (!todo.length) return done(db);
 
   let stop = false;
@@ -87,99 +90,91 @@ async function main() {
     console.log('\nОстанавливаюсь, сохраняю собранное… (ещё раз Ctrl+C — выйти сразу)');
   });
 
-  // first contact: say right away whether Steam answers at all
-  console.log('Проверяю, отвечает ли steamcommunity.com…');
-  await warmUp();
-  let rewarmed = 0;
-
-  let ok = 0, empty = 0, wait = 0, netErr = 0, emptyRun = 0, newMarket = 0;
+  let ok = 0, extra = 0, empty = 0, wait = 0, netErr = 0, emptyRun = 0, req = 0, badCur = 0;
   const t0 = Date.now();
-  for (let i = 0; i < todo.length && !stop; i++) {
-    const name = todo[i];
-    const tag = `[${i + 1}/${todo.length}]`;
+  const left = () => targets.filter((n) => pending(db.items[n]));
+  while (!stop) {
+    todo = left().filter((n) => !db.items[n]?.tried);
+    if (!todo.length) break;
+    const name = todo[0];
+    const tag = `[${targets.length - left().length + 1}/${targets.length}]`;
     const url = `https://steamcommunity.com/market/listings/730/${encodeURIComponent(name)}`;
     let r;
     try {
       r = await get(url);
+      req++;
     } catch (e) {
       netErr++;
       const why = e.name === 'TimeoutError' ? `нет ответа за ${TIMEOUT / 1000} с` : (e.cause?.code || e.cause?.message || e.message);
       console.log(`${tag} ${short(name)} — ошибка сети: ${why}`);
       if (netErr >= 6) {
         save(db);
-        console.log('\nsteamcommunity.com не отвечает 6 раз подряд. Проверьте, открывается ли в браузере');
-        console.log('  https://steamcommunity.com/market/listings/730/AK-47%20%7C%20Redline%20(Field-Tested)');
-        console.log('Если сайт открывается только с обходом блокировок (Zapret, VPN), он должен работать и для node.');
-        console.log('Собранное сохранено — после проверки просто запустите скрипт снова.');
+        console.log('\nsteamcommunity.com не отвечает 6 раз подряд. Проверьте, открывается ли он в браузере;');
+        console.log('если только с обходом блокировок (Zapret, VPN) — он должен работать и для node. Собранное сохранено.');
         process.exit(2);
       }
       await sleep(5000 * netErr);
-      i--;
       continue;
     }
     netErr = 0;
     if (r.status === 429) {
       wait = Math.min((wait || 30000) * 2, 600000);
-      DELAY = Math.min(DELAY + 1000, 12000); // go slower from now on
-      console.log(`${tag} Steam просит подождать (429) — пауза ${Math.round(wait / 1000)} с, дальше по ${DELAY / 1000} с на предмет…`);
+      DELAY = Math.min(DELAY + 1000, 12000);
+      console.log(`${tag} Steam просит подождать (429) — пауза ${Math.round(wait / 1000)} с, дальше по ${DELAY / 1000} с на страницу…`);
       save(db);
       await sleep(wait);
-      i--;
       continue;
     }
     wait = 0;
     if (!r.ok) {
-      db.items[name] = { err: r.status };
+      db.items[name] = { err: r.status, tried: true };
       console.log(`${tag} ${short(name)} — Steam ответил ${r.status}`);
-    } else if (/\/listings\/730\/G\d/.test(r.finalUrl || r.url)) {
-      // Steam sent the new market (no chart in the page): refresh the visitor cookies once and retry the item
-      await r.text().catch(() => {});
-      if (rewarmed < 3) { rewarmed++; jar.clear(); jar.set('bMarketOptOut', '1'); await warmUp(); await sleep(3000); i--; continue; }
-      newMarket = (newMarket || 0) + 1;
-      db.items[name] = { p: [] };
-      console.log(`${tag} ${short(name)} — Steam открыл новую версию маркета (без графика)`);
-      if (newMarket >= 3 && ok === 0) {
-        save(db);
-        console.log('\nSteam больше не отдаёт старую страницу с графиком цен. Пришлите скриншот — нужен новый способ.');
-        process.exit(3);
-      }
     } else {
       const html = await r.text();
-      const m = html.match(/var line1=(\[.*?\]);/s);
-      const pre = (html.match(/var strFormatPrefix = "([^"]*)"/) || [])[1] || '';
-      const suf = (html.match(/var strFormatSuffix = "([^"]*)"/) || [])[1] || '';
-      let pts = null;
-      if (m) try { pts = JSON.parse(m[1]); } catch { /* broken page */ }
-      if (pts && pts.length) {
-        db.items[name] = { cur: `${pre}|${suf}`, p: pts };
+      const found = parseNewMarket(html) || {};
+      const old = parseOldMarket(html);
+      if (old) found[name] = old;
+      const names = Object.keys(found);
+      for (const n of names) {
+        if (found[n].cur.startsWith('?')) { badCur++; continue; }
+        const isTarget = targets.includes(n);
+        if (!pending(db.items[n]) && db.items[n]?.p?.length >= found[n].p.length) continue;
+        db.items[n] = found[n];
+        if (n !== name) isTarget ? ok++ : extra++;
+      }
+      if (badCur && !ok && names.length) {
+        save(db);
+        console.log(`\nSteam показывает цены в валюте, которую импорт пока не понимает (${Object.values(found)[0].cur}). Пришлите скриншот.`);
+        process.exit(4);
+      }
+      if (found[name] && !found[name].cur.startsWith('?')) {
         ok++;
         emptyRun = 0;
-        console.log(`${tag} ${short(name)} — ${pts.length} точек с ${String(pts[0][0]).slice(0, 11)}`);
+        const sib = names.filter((n) => n !== name).length;
+        console.log(`${tag} ${short(name)} — ${found[name].p.length} точек с ${found[name].p[0][0].slice(0, 11)}${sib ? ` (+${sib} вариантов с той же страницы)` : ''}`);
       } else {
-        // a page without the chart: either the item really has no sales or Steam served an error page — retry later
-        db.items[name] = { p: [] };
+        db.items[name] = { p: [], tried: true };
         empty++;
         emptyRun++;
         const title = ((html.match(/<title>([^<]*)<\/title>/i) || [])[1] || '').trim();
-        console.log(`${tag} ${short(name)} — на странице нет графика (${Math.round(html.length / 1024)} КБ, «${short(title || 'без заголовка', 60)}»)`);
-        if (empty === 1) {
-          // keep one sample so we can see what Steam actually sent
-          try { fs.writeFileSync('debug-page.html', html); console.log('   образец страницы сохранён в debug-page.html'); } catch { /* read-only folder */ }
-        }
-        if (emptyRun === 8 && ok === 0) {
-          console.log('\nУже 8 страниц подряд без графика цен. Возможно, Steam отдаёт заглушку вместо страницы предмета');
-          console.log('(например, страницу блокировки провайдера или «ошибка, попробуйте позже»). Откройте ссылку выше в браузере');
-          console.log('и проверьте, виден ли график. Скрипт продолжает работу; Ctrl+C — остановить.\n');
+        console.log(`${tag} ${short(name)} — на странице нет истории (${Math.round(html.length / 1024)} КБ, «${short(title || 'без заголовка', 50)}»)`);
+        if (empty === 1) try { fs.writeFileSync('debug-page.html', html); console.log('   образец страницы сохранён в debug-page.html'); } catch { /* read-only */ }
+        if (emptyRun === 6 && ok === 0) {
+          save(db);
+          console.log('\n6 страниц подряд без истории цен — похоже, Steam опять поменял страницу. Пришлите скриншот и debug-page.html.');
+          process.exit(3);
         }
       }
     }
-    if ((i + 1) % 10 === 0) {
+    if (req % 5 === 0) {
       save(db);
-      const left = ((Date.now() - t0) / (i + 1)) * (todo.length - i - 1);
-      console.log(`   … сохранено: с историей ${ok}, без графика ${empty}; осталось ≈${mmss(left)}`);
+      const rest = left().length;
+      console.log(`   … сохранено; осталось ${rest} из ${targets.length}${extra ? `, попутно собрано ещё ${extra} вариантов вне списка` : ''}; ≈${mmss(((Date.now() - t0) / req) * Math.max(1, rest / 4))}`);
     }
     await sleep(DELAY + Math.random() * 700);
   }
+  // items only marked as tried (no history found) stay pending for the next run
+  for (const it of Object.values(db.items)) delete it.tried;
   done(db, stop);
 }
 
@@ -188,8 +183,7 @@ function done(db, stopped = false) {
   const all = Object.values(db.items);
   const good = all.filter((x) => x.p?.length).length;
   console.log(`\n${stopped ? 'Остановлено, при следующем запуске продолжу' : 'Готово'}: ${good} предметов с историей (из ${all.length}) в файле ${OUT}.`);
-  if (good) console.log('Перетащите этот файл в чат или загрузите в релиз data-store.');
-  else console.log('Ни одного графика не получено — пришлите скриншот вывода, разберёмся.');
+  if (!good) console.log('Ни одного графика не получено — пришлите скриншот вывода, разберёмся.');
 }
 
 main().catch((e) => { console.error('Ошибка:', e.cause?.code || e.message); process.exit(1); });
