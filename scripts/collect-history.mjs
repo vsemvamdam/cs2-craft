@@ -37,15 +37,39 @@ function save(db) {
 /** what is still to fetch: everything without a price history, except items Steam says don't exist (404) */
 const pending = (it) => !it || !(it.p?.length || it.err === 404);
 
-async function get(url) {
-  return fetch(url, {
-    signal: AbortSignal.timeout(TIMEOUT),
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) cs2-craft history',
-      'Accept-Language': 'en-US,en;q=0.9',
-      Cookie: 'bMarketOptOut=1', // old market page: it has the price chart (var line1) in the HTML
-    },
-  });
+// Like a browser: keep the cookies Steam hands out (session, country, browser id) and send them back, plus the
+// «leave the market beta» preference — the old listing page has the price chart (var line1) in the HTML.
+// Since Nov 6 2026 the preference alone is not enough, Steam wants it together with its own visitor cookies.
+const jar = new Map([['bMarketOptOut', '1']]);
+const cookieHeader = () => [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
+function absorb(r) {
+  for (const c of r.headers.getSetCookie?.() || []) {
+    const kv = c.split(';')[0], i = kv.indexOf('=');
+    if (i > 0) jar.set(kv.slice(0, i).trim(), kv.slice(i + 1).trim());
+  }
+  jar.set('bMarketOptOut', '1');
+}
+const HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) cs2-craft history',
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.9',
+};
+/** GET with manual redirects, so cookies set on the way are kept; returns the final response (+ .finalUrl) */
+async function get(url, hops = 5) {
+  let u = url;
+  for (let i = 0; i <= hops; i++) {
+    const r = await fetch(u, { signal: AbortSignal.timeout(TIMEOUT), redirect: 'manual', headers: { ...HEADERS, Cookie: cookieHeader() } });
+    absorb(r);
+    const loc = r.headers.get('location');
+    if (r.status >= 300 && r.status < 400 && loc) { u = new URL(loc, u).href; continue; }
+    r.finalUrl = u;
+    return r;
+  }
+  throw new Error('слишком много переадресаций');
+}
+/** visit the market home page like a browser does — Steam sets its visitor cookies there */
+async function warmUp() {
+  try { const r = await get('https://steamcommunity.com/market/'); await r.text(); } catch { /* the item requests will report errors */ }
 }
 
 async function main() {
@@ -65,6 +89,8 @@ async function main() {
 
   // first contact: say right away whether Steam answers at all
   console.log('Проверяю, отвечает ли steamcommunity.com…');
+  await warmUp();
+  let rewarmed = 0;
 
   let ok = 0, empty = 0, wait = 0, netErr = 0, emptyRun = 0, newMarket = 0;
   const t0 = Date.now();
@@ -105,8 +131,10 @@ async function main() {
     if (!r.ok) {
       db.items[name] = { err: r.status };
       console.log(`${tag} ${short(name)} — Steam ответил ${r.status}`);
-    } else if (/\/listings\/730\/G\d/.test(r.url)) {
-      // Steam ignored the opt-out and sent the new market (no chart in the page)
+    } else if (/\/listings\/730\/G\d/.test(r.finalUrl || r.url)) {
+      // Steam sent the new market (no chart in the page): refresh the visitor cookies once and retry the item
+      await r.text().catch(() => {});
+      if (rewarmed < 3) { rewarmed++; jar.clear(); jar.set('bMarketOptOut', '1'); await warmUp(); await sleep(3000); i--; continue; }
       newMarket = (newMarket || 0) + 1;
       db.items[name] = { p: [] };
       console.log(`${tag} ${short(name)} — Steam открыл новую версию маркета (без графика)`);
