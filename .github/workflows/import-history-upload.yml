@@ -1,6 +1,7 @@
 name: Импорт истории цен (ветка history-upload)
 
-# Ветка history-upload содержит только файл cs2-history.json.gz (собран дома scripts/collect-history.mjs)
+# Ветка history-upload содержит только файл cs2-history.json.gz (собран дома scripts/collect-history.mjs;
+# больше 100 МБ — частями cs2-history.json.gz.part-aa, -ab…)
 # и этот workflow: пуш в ветку сам импортирует историю в хранилище и пересобирает сайт.
 on:
   push:
@@ -30,7 +31,15 @@ jobs:
       - name: Файл с историей из ветки
         run: |
           git fetch --depth 1 origin history-upload
-          git show FETCH_HEAD:cs2-history.json.gz > cs2-history.json.gz
+          # GitHub refuses files over 100 MB, so a big file comes split into cs2-history.json.gz.part-aa, -ab, …
+          parts=$(git ls-tree --name-only FETCH_HEAD | grep '^cs2-history\.json\.gz\.part-' | sort || true)
+          if [ -n "$parts" ]; then
+            : > cs2-history.json.gz
+            for p in $parts; do git show "FETCH_HEAD:$p" >> cs2-history.json.gz; done
+          else
+            git show FETCH_HEAD:cs2-history.json.gz > cs2-history.json.gz
+          fi
+          gzip -t cs2-history.json.gz
           ls -la cs2-history.json.gz
       - name: Импорт
         run: |
