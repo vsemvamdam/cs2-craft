@@ -2,9 +2,11 @@ import { useMemo, useState } from 'react';
 import type { Skin } from '../lib/data';
 import { findSeedTier, getFadePercentage, getFadeTable, getPatternInfo, NO_PATTERN_DIFFERENCE_RU } from '../lib/patterns';
 import { href } from '../lib/router';
+import { inspectHex, inspectLink } from '../lib/inspect';
+import { copy } from '../lib/hooks';
 
 /** Pattern section of a skin page: says plainly when the seed doesn't matter, otherwise offers a seed tool. */
-export function PatternBlock({ skin, phase }: { skin: Skin; phase?: string }) {
+export function PatternBlock({ skin, phase, float }: { skin: Skin; phase?: string; float?: number | null }) {
   const info = useMemo(() => getPatternInfo(skin.wpn, skin.fin), [skin]);
   const [seed, setSeed] = useState('');
   if (!info) return <div className="card pad muted" style={{ textAlign: 'center' }}>{NO_PATTERN_DIFFERENCE_RU}</div>;
@@ -45,8 +47,32 @@ export function PatternBlock({ skin, phase }: { skin: Skin; phase?: string }) {
             </div>
           ))}
           <p className="tiny faint">Фаза задаётся отдельным paint index, а сид меняет рисунок только внутри фазы. Шансы фаз Valve не публикует — это оценки сообщества.</p>
+          <SeedInput raw={seed} setSeed={setSeed} />
         </div>
       )}
+
+      <InspectRow skin={skin} phase={phase} seed={n != null && !Number.isNaN(n) ? Math.min(1000, n) : null} float={float} />
+    </div>
+  );
+}
+
+/** The picture above is Steam's one official icon for the skin — the same for every seed. The exact look of a
+ *  seed is drawn only by the game, so we give an inspect link that opens this skin with this seed in CS2. */
+function InspectRow({ skin, phase, seed, float }: { skin: Skin; phase?: string; seed: number | null; float?: number | null }) {
+  const pi = (phase && skin.phases?.find((p) => p.ph === phase)?.pi) || skin.pi;
+  if (!skin.wid || !pi) return null;
+  const wear = float != null && !Number.isNaN(float) ? Math.min(skin.mx, Math.max(skin.mn, float)) : +(skin.mn + Math.min(0.01, (skin.mx - skin.mn) / 2)).toFixed(4);
+  const item = seed == null ? null : { defindex: skin.wid, paintindex: pi, paintseed: seed, paintwear: wear, rarity: skin.gold ? 6 : Math.min(skin.rar, 7), quality: skin.gold ? 3 : 4 };
+  return (
+    <div className="pt-inspect stack" style={{ gap: 8 }}>
+      <p className="small muted">Картинка вверху — официальная иконка Steam: она одна на все сиды, поэтому при выборе сида не меняется. Как выглядит именно этот сид, показывает сама игра — кнопка откроет CS2 сразу в окне осмотра этого скина.</p>
+      {item ? (
+        <div className="row" style={{ gap: 8 }}>
+          <a className="btn primary small" href={inspectLink(item)}>Осмотреть сид {seed} в CS2 ↗</a>
+          <button className="btn small ghost" onClick={() => copy('csgo_econ_action_preview ' + inspectHex(item), 'Команда скопирована — вставьте в консоль CS2')}>Команда для консоли</button>
+          <span className="tiny faint">флоат {wear.toFixed(4)}</span>
+        </div>
+      ) : <span className="tiny faint">Введите сид или выберите один из списка — появится кнопка осмотра в игре.</span>}
     </div>
   );
 }
@@ -76,7 +102,7 @@ function FadeTool({ weapon, finish, seed, setSeed, raw }: { weapon: string; fini
           <div className="kpi"><div className="label">Место</div><div className="value">{r.ranking}</div><div className="tiny faint">с лучшего или худшего края</div></div>
         </div>
       )}
-      {best.length > 0 && <div className="small muted">Лучшие сиды: {best.map((b) => <button key={b.s} className="chip" style={{ margin: 2 }} onClick={() => setSeed(String(b.s))}>{b.s} · {b.percentage.toFixed(1)}%</button>)}</div>}
+      {best.length > 0 && <div className="small muted">Лучшие сиды: {best.map((b) => <button key={b.s} className={'chip' + (seed === b.s ? ' on' : '')} style={{ margin: 2 }} onClick={() => setSeed(String(b.s))}>{b.s} · {b.percentage.toFixed(1)}%</button>)}</div>}
     </div>
   );
 }
