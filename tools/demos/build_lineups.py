@@ -53,6 +53,27 @@ def write_json(path: Path, obj):
     path.write_text(json.dumps(obj, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
 
+def run_forward(r):
+    """Player's speed along the aim direction at the release, estimated from the first trajectory step
+    (grenade velocity = aim * 675 * lerp(0.3, 1, strength) + 1.25 * player velocity). Per throw it is noisy
+    (standing throws come out at about -20 ± 40 u/s), the median of a lineup is reliable: walking 60–160,
+    running 150–250. It tells a plain jump-throw from one with W held — extract_nades classifies the
+    movement by speed > 135 only, so W-jump-throws that start from a standstill were labelled «в прыжке»."""
+    tr, dur = r.get("traj") or [], r.get("dur") or 0
+    if len(tr) < 3 or len(tr[0]) < 3 or not dur:
+        return None
+    dt = dur / (len(tr) - 1)
+    gvx, gvy = (tr[1][0] - tr[0][0]) / dt, (tr[1][1] - tr[0][1]) / dt
+    p = r["pitch"] - 360 if r["pitch"] > 180 else r["pitch"]
+    p -= (90 - abs(p)) * 10 / 90  # the game lifts the throw angle
+    yaw = math.radians(r["yaw"])
+    k = {"L": 1.0, "LR": 0.5, "R": 0.0}.get(r.get("btn") or "L", 1.0)
+    v = 675 * (0.3 + 0.7 * k)
+    fx, fy = math.cos(math.radians(p)) * math.cos(yaw), math.cos(math.radians(p)) * math.sin(yaw)
+    pvx, pvy = (gvx - fx * v) / 1.25, (gvy - fy * v) / 1.25
+    return pvx * math.cos(yaw) + pvy * math.sin(yaw)
+
+
 def write_raw(out: Path, mp: str, meta: dict, throws: list, places=None, players=None):
     """compact per-demo file (format rv=3): throws as arrays, trajectory ≤20 points uniform in time (x, y, z)"""
     rows = []
@@ -285,6 +306,7 @@ def build(out_dir: Path, keep_single=False):
             moves = Counter(r["move"] for r in c.items)
             btns = Counter(r["btn"] for r in c.items if r["btn"])
             durs = sorted(r["dur"] for r in c.items if r["dur"])
+            fws = sorted(f for f in (run_forward(r) for r in c.items) if f is not None)
             times = sorted(r["time"] for r in c.items)
             ex_all = sorted(c.items, key=lambda r: (-r["m"], r["round"]))
             ex = ex_all[:MAX_EX]
@@ -298,6 +320,7 @@ def build(out_dir: Path, keep_single=False):
                 "land": [round(c.lx, 1), round(c.ly, 1), rep["lz"]], "pf": pf, "pl": pl,
                 "move": moves.most_common(1)[0][0], "moves": dict(moves),
                 "btn": btns.most_common(1)[0][0] if btns else "", "dur": durs[len(durs) // 2] if durs else 0,
+                **({"fw": round(fws[len(fws) // 2])} if len(fws) >= 3 else {}),
                 "time": times[len(times) // 2], "traj": rep["traj"], "ex": [[r["p"], r["m"], r["round"]] for r in ex],
                 "pp": sorted({r["p"] for r in c.items}), "ms": sorted({r["m"] for r in c.items}),
             })

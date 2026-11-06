@@ -20,6 +20,7 @@ type Lineup = {
   ex: [number, number, number][]; // [player, match, round] — latest few
   pp?: number[]; ms?: number[]; // all players / matches of the lineup (v3)
   t?: number; pf?: string; pl?: string; btn?: string; dur?: number;
+  fw?: number; // median speed along the aim at the release, u/s (≥ 60 = W held), from the trajectories
 };
 type Target = [string, number, number, number, string, number]; // type, x, y, z, place, n
 type MapFile = { v: number; map: string; updated: string; demos: number; throws: number; players: [string, string][]; matches: [string, string, string, string][]; targets?: Target[]; lineups: Lineup[] };
@@ -56,9 +57,14 @@ function loadDetails(map: string, id: string) {
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 /** key presses for a throw, like cs2util: «Левый клик + W + Бросок в прыжке» */
-export function combo(move: string, btn?: string) {
+export const W_SPEED = 60;
+export function combo(move: string, btn?: string, fw?: number) {
   const b = btn ? BTN[btn] : '';
-  const m: Record<string, string[]> = { stand: [], crouch: ['Присесть'], walk: ['Шаг (Shift)'], run: ['На бегу'], jump: ['Бросок в прыжке'], runjump: ['Разбег', 'Бросок в прыжке'] };
+  const w = fw != null && fw >= W_SPEED;
+  const m: Record<string, string[]> = {
+    stand: w ? ['Зажать W'] : [], crouch: w ? ['Присесть', 'Зажать W'] : ['Присесть'], walk: ['Шаг (Shift)', 'W'], run: ['Бег (W)'],
+    jump: w ? ['Зажать W', 'Бросок в прыжке'] : ['Бросок в прыжке'], runjump: ['Разбег (W)', 'Бросок в прыжке'],
+  };
   return [b, ...(m[move] || [])].filter(Boolean);
 }
 
@@ -297,7 +303,7 @@ function MapView({ m, maps }: { m: MapInfo; maps: MapInfo[] }) {
                     <NadeIcon type={l.type} size={20} />
                     <span className="nd-item-main">
                       <span className="nd-item-title">{t.title} <span className="muted" style={{ fontWeight: 500 }}>{t.from}</span></span>
-                      <span className="tiny muted nd-ell">{l.side} · {MOVES[l.move] || l.move} · {who.slice(0, 3).join(', ')}{who.length > 3 ? ` +${who.length - 3}` : ''}</span>
+                      <span className="tiny muted nd-ell">{l.side} · {MOVES[l.move] || l.move}{(l.fw ?? 0) >= W_SPEED && ['jump', 'stand', 'crouch'].includes(l.move) ? ' + W' : ''} · {who.slice(0, 3).join(', ')}{who.length > 3 ? ` +${who.length - 3}` : ''}</span>
                     </span>
                     <span className="small muted nowrap">{favs.has(l.id) ? '★ ' : ''}{l.n}×</span>
                   </button>
@@ -438,7 +444,7 @@ function LineupModal({ m, l, d, names, lang, highlight, fav, onFav, onClose }: {
   const t = lineupTitle(l, names, m.id, lang);
   const setpos = `setpos ${th.from[0]} ${th.from[1]} ${th.from[2]}; setang ${th.ang[0]} ${th.ang[1]} 0`;
   const moves = Object.entries(l.moves).sort((a, b) => b[1] - a[1]);
-  const keys = combo(th.move, th.btn);
+  const keys = combo(th.move, th.btn, l.fw);
   const curName = cur ? d.players[cur.p][0] : '';
   const title = `${m.name} — ${t.title} ${t.from}`.trim();
 
@@ -472,7 +478,8 @@ function LineupModal({ m, l, d, names, lang, highlight, fav, onFav, onClose }: {
           </div>
           <div className="nd-dialog-info stack" style={{ gap: 12 }}>
             <dl className="dl">
-              <dt>Техника</dt><dd>{moves.map(([k, v], i) => <span key={k}>{i ? ', ' : ''}{MOVES[k] || k}{moves.length > 1 ? ` ${Math.round((v / l.n) * 100)}%` : ''}</span>)}</dd>
+              <dt>Техника</dt><dd>{moves.map(([k, v], i) => <span key={k}>{i ? ', ' : ''}{MOVES[k] || k}{moves.length > 1 ? ` ${Math.round((v / l.n) * 100)}%` : ''}</span>)}
+                {l.fw != null && ['jump', 'stand', 'crouch'].includes(l.move) ? <span className="muted" title="Скорость игрока вдоль прицела в момент броска, посчитана по полёту гранат всех профи этой раскидки">{l.fw >= W_SPEED ? ` · с зажатой W (≈${l.fw} ед/с)` : ' · стоя на месте, без W'}</span> : null}</dd>
               {th.btn && <><dt>Кнопка</dt><dd>{BTN[th.btn]}</dd></>}
               <dt>Обычно</dt><dd>на {fmtTime(l.time)} от начала раунда</dd>
               {th.dur > 0 && <><dt>До взрыва</dt><dd>{th.dur.toFixed(1)} с после броска</dd></>}
