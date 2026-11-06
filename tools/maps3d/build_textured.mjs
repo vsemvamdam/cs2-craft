@@ -30,7 +30,7 @@ if (!SRC || !OUT) { console.error('usage: node build_textured.mjs export/de_mira
 const TEX = +opt('tex', 512);
 const SIMPLIFY = +opt('simplify', 0.0004);
 const JS_TEX = +opt('js-tex', 384); // texture size when sharp is unavailable
-const MAX_TRIS = +opt('max-tris', 1_000_000); // heavy maps (Ancient: 9M) are simplified down to this budget
+const MAX_TRIS = +opt('max-tris', 1_500_000); // heavy maps (Ancient: 9M) are simplified down to this budget
 const INCH = 1 / 0.0254; // Source 2 Viewer writes metres
 
 const isTool = (name) => /^materials\/tools\//i.test(name) || /tools(nodraw|clip|trigger|skybox|invisible|playerclip|blocklight|black)/i.test(name);
@@ -145,8 +145,9 @@ await doc.transform(
 if (tris() > MAX_TRIS) {
   const before = tris();
   // stronger pass towards the budget: allowed error grows until the map fits (foliage and small props go first)
-  for (const err of [0.0015, 0.004, 0.01]) {
-    await doc.transform(simplify({ simplifier: MeshoptSimplifier, ratio: MAX_TRIS / tris(), error: err, lockBorder: false }), prune());
+  // borders stay locked and the error stays small: a few % over budget is better than holes in the floor
+  for (const err of [0.001, 0.002, 0.003]) {
+    await doc.transform(simplify({ simplifier: MeshoptSimplifier, ratio: MAX_TRIS / tris(), error: err, lockBorder: true }), prune());
     if (tris() <= MAX_TRIS * 1.05) break;
   }
   console.log(`budget ${MAX_TRIS}: ${Math.round(before)} → ${Math.round(tris())} triangles`);
