@@ -37,7 +37,17 @@ jobs:
           if [ -n "$missing" ]; then
             echo "::notice::Не заданы секреты:$missing — сервер статистики не развёрнут (раздел «Статистика» покажет, что он подключается)."
             echo "skip=1" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          # Account ID — 32 hex-символа; если в секрет попала ссылка (dash.cloudflare.com/<id>/home), пробел или
+          # перевод строки — берём из значения только сам ID
+          id=$(printf '%s' "$CLOUDFLARE_ACCOUNT_ID" | tr 'A-F' 'a-f' | grep -oE '[0-9a-f]{32}' | head -1)
+          if [ -z "$id" ]; then
+            echo "::error::В секрете CLOUDFLARE_ACCOUNT_ID нет 32-символьного Account ID (буквы a–f и цифры). Скопируйте его из адреса dash.cloudflare.com/<ID>/home."
+            exit 1
+          fi
+          echo "::add-mask::$id"
+          echo "CLOUDFLARE_ACCOUNT_ID=$id" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
         if: steps.s.outputs.skip != '1'
       - uses: actions/setup-node@v4
