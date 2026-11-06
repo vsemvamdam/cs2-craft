@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Spinner } from '../components/ui';
 import { href, setQuery, useRoute } from '../lib/router';
 import { loadLpLogos, loadTeamIndex, teamKeys, useTeamLogos, useTeamSlug, type TeamIndex } from '../lib/teams';
-import { countryRu, flagUrl, ROLE_RU } from '../lib/people';
+import { countryFromFlag, countryRu, flagUrl, ROLE_RU } from '../lib/people';
 import '../styles/team.css';
 
 /* Team page: everything we know about a team.
@@ -13,7 +13,8 @@ import '../styles/team.css';
 
 type MatchRow = [number, string, number, number, [string, number, number][], string, string, string, number | null, number | null];
 type TeamFile = { name: string; page: string; m: MatchRow[]; titles: [number, string, string, string][] };
-type Info = { location?: string; region?: string; created?: string; disbanded?: string; staff?: [string, string][]; links?: Record<string, string> };
+type Person = { id: string; t: string; name: string; flag: string; role: string; igl: number; inactive: number; sid?: string; for?: string; tour?: string };
+type Info = { location?: string; region?: string; created?: string; disbanded?: string; staff?: [string, string, string?, string?][]; links?: Record<string, string>; squad?: Person[]; standins?: Person[] };
 type Ranking = { date: string; teams: [number, number, string, string[], string, number, number][] };
 type PIndex = { cols: string[]; rows: (string | number)[][] };
 type PInfo = { lp?: string; id?: string; name?: string; rn?: string; c?: string; r?: string };
@@ -62,6 +63,7 @@ export default function Team({ slug }: { slug: string }) {
   const [avatars, setAvatars] = useState<Record<string, string>>({});
   const [photos, setPhotos] = useState<Record<string, string>>({});
   const [es, setEs] = useState<EsMatch[]>([]);
+  const [extra, setExtra] = useState<Record<string, PInfo & { team?: string }>>({});
   const logo = useTeamLogos();
   useEffect(() => {
     setFile(undefined);
@@ -76,6 +78,7 @@ export default function Team({ slug }: { slug: string }) {
     getJSON<Record<string, string>>(DATA + 'players/avatars.json').then((x) => setAvatars(x || {}));
     loadLpLogos().then((x) => setPhotos(x?.p || {}));
     getJSON<{ matches: EsMatch[] }>(ESPORTS).then((x) => setEs(x?.matches || []));
+    getJSON<Record<string, PInfo & { team?: string }>>(DATA + 'players/extra.json').then((x) => setExtra(x || {}));
   }, []);
 
   const keys = useMemo(() => new Set(file ? [file.name, ...(ix ? Object.entries(ix.k).filter(([, s]) => s === slug).map(([k]) => k) : [])].flatMap(teamKeys) : []), [file, ix, slug]);
@@ -141,17 +144,20 @@ export default function Team({ slug }: { slug: string }) {
       <div className="tm-grid">
         <div className="stack" style={{ gap: 18, minWidth: 0 }}>
           {next && <NextMatch m={next} isUs={isUs} logo={logo} />}
-          <Roster teamName={name} rank={ranked} pix={pix} links={links} avatars={avatars} photos={photos} isUs={isUs} />
+          <Roster teamName={name} rank={ranked} squad={inf.squad} standins={inf.standins} pix={pix} links={links} extra={extra} avatars={avatars} photos={photos} isUs={isUs} />
           <Matches file={T} logo={logo} />
         </div>
         <div className="stack" style={{ gap: 18, minWidth: 0 }}>
           {inf.staff?.length ? (
             <section className="tm-card">
               <h3 className="tm-h">Тренерский штаб</h3>
-              {inf.staff.map(([n, role]) => (
-                <div key={n} className="tm-staff">
+              {inf.staff.map(([n, role, real, flag]) => (
+                <div key={n + role} className="tm-staff">
                   <span className="tm-ini" style={{ background: `hsl(${HUE(n)} 25% 26%)` }}>{n.slice(0, 2).toUpperCase()}</span>
-                  <b>{n}</b><span className="tm-chip">{role}</span>
+                  <div className="stack" style={{ gap: 1, minWidth: 0 }}>
+                    <span className="row" style={{ gap: 8 }}><b>{flag && flagUrl(flag) ? <img className="tm-flag" src={flagUrl(flag)} alt="" title={countryFromFlag(flag)} /> : null}{n}</b><span className="tm-chip">{role}</span></span>
+                    {real ? <span className="tiny muted">{real}</span> : null}
+                  </div>
                 </div>
               ))}
             </section>
@@ -212,46 +218,60 @@ function NextMatch({ m, isUs, logo }: { m: EsMatch; isUs: (n?: string) => boolea
   );
 }
 
-function Roster({ teamName, rank, pix, links, avatars, photos, isUs }: {
-  teamName: string; rank: Ranking['teams'][0] | null; pix: PIndex | null; links: Record<string, PInfo>; avatars: Record<string, string>; photos: Record<string, string>; isUs: (n?: string) => boolean;
+function Roster({ teamName, rank, squad, standins, pix, links, extra, avatars, photos, isUs }: {
+  teamName: string; rank: Ranking['teams'][0] | null; squad?: Person[]; standins?: Person[]; pix: PIndex | null; links: Record<string, PInfo>; extra: Record<string, PInfo>;
+  avatars: Record<string, string>; photos: Record<string, string>; isUs: (n?: string) => boolean;
 }) {
-  const rows = useMemo(() => {
+  type P = { sid: string; name: string; team: string; maps: number; kd: number; adr: number };
+  const all = useMemo<P[]>(() => {
     if (!pix) return [];
     const c = (k: string) => pix.cols.indexOf(k);
     const [iS, iN, iT, iM, iK, iD, iA] = ['sid', 'name', 'team', 'maps', 'k', 'd', 'adr'].map(c);
-    const all = pix.rows.map((r) => ({ sid: String(r[iS]), name: String(r[iN]), team: String(r[iT] || ''), maps: +r[iM], kd: +r[iK] / Math.max(+r[iD], 1), adr: +r[iA] }));
-    if (rank) {
-      return rank[3].map((nick) => {
-        const cands = all.filter((p) => p.name.toLowerCase() === nick.toLowerCase());
-        const p = cands.find((x) => isUs(x.team)) || cands.sort((x, y) => y.maps - x.maps)[0];
-        return { nick, p };
-      });
-    }
-    return all.filter((p) => isUs(p.team)).sort((a, b) => b.maps - a.maps).slice(0, 5).map((p) => ({ nick: p.name, p }));
-  }, [pix, rank, isUs]);
+    return pix.rows.map((r) => ({ sid: String(r[iS]), name: String(r[iN]), team: String(r[iT] || ''), maps: +r[iM], kd: +r[iK] / Math.max(+r[iD], 1), adr: +r[iA] }));
+  }, [pix]);
+  const bySid = useMemo(() => new Map(all.map((p) => [p.sid, p])), [all]);
+  const byNick = (nick: string) => { const cands = all.filter((p) => p.name.toLowerCase() === nick.toLowerCase()); return cands.find((x) => isUs(x.team)) || cands.sort((x, y) => y.maps - x.maps)[0]; };
+  // the official roster from the team's Liquipedia page; without it — the roster Valve counted for the ranking
+  const players = squad?.filter((x) => !x.role) || [];
+  const rows: { nick: string; sid?: string; p?: P; flag?: string; real?: string; igl?: boolean; inactive?: boolean }[] = players.length
+    ? players.map((x) => { const p = (x.sid && bySid.get(x.sid)) || byNick(x.id); return { nick: x.id, sid: x.sid || p?.sid, p, flag: x.flag, real: x.name, igl: !!x.igl, inactive: !!x.inactive }; })
+    : rank ? rank[3].map((nick) => { const p = byNick(nick); return { nick, sid: p?.sid, p }; })
+      : all.filter((p) => isUs(p.team)).sort((a, b) => b.maps - a.maps).slice(0, 5).map((p) => ({ nick: p.name, sid: p.sid, p }));
   if (!rows.length) return null;
+  const subs = (standins || []).filter((x) => !x.role && !players.some((pl) => pl.id.toLowerCase() === x.id.toLowerCase()));
   return (
     <section className="tm-card">
-      <h3 className="tm-h">Основной состав{rank ? <span className="tm-hsub">по рейтингу Valve</span> : null}</h3>
+      <h3 className="tm-h">Основной состав<span className="tm-hsub">{players.length ? 'официальный, по Liquipedia' : rank ? 'по рейтингу Valve' : 'по нашим демкам'}</span></h3>
       <div className="tm-roster">
-        {rows.map(({ nick, p }) => {
-          const li = p ? links[p.sid] : undefined;
-          const photo = p && photos[p.sid] ? import.meta.env.BASE_URL + 'data/logos/' + photos[p.sid] : p && avatars[p.sid] ? `https://avatars.steamstatic.com/${avatars[p.sid]}_full.jpg` : '';
-          const role = li?.r ? li.r.split(',').map((r) => ROLE_SHORT[r] || r)[0] : '';
+        {rows.map(({ nick, sid, p, flag, real, igl, inactive }) => {
+          const li = sid ? links[sid] || extra[sid] : undefined;
+          const photo = sid && photos[sid] ? import.meta.env.BASE_URL + 'data/logos/' + photos[sid] : sid && avatars[sid] ? `https://avatars.steamstatic.com/${avatars[sid]}_full.jpg` : '';
+          const roles = (li?.r || '').split(',').filter(Boolean);
+          const role = igl ? 'Капитан' : roles.length ? ROLE_SHORT[roles.find((r) => r !== 'igl') || roles[0]] || roles[0] : '';
+          const fl = flag || li?.c;
           const body = (
             <>
-              <span className={'tm-photo' + (p && photos[p.sid] ? ' real' : '')}>{photo ? <img src={photo} alt={nick} loading="lazy" /> : <b>{nick.slice(0, 2).toUpperCase()}</b>}</span>
-              {role ? <span className="tm-role" title={li?.r?.split(',').map((r) => ROLE_RU[r] || r).join(', ')}>{role}</span> : <span className="tm-role empty" />}
-              <b className="tm-nick">{li?.c && flagUrl(li.c) ? <img className="tm-flag" src={flagUrl(li.c)} alt="" title={countryRu(li.c)} /> : null}{nick}</b>
-              <span className="tm-real">{li?.rn || li?.name || ' '}</span>
-              {p ? <span className="tm-pill">{p.maps} карт · ADR {p.adr.toFixed(0)}</span> : <span className="tm-pill dim">нет в демках</span>}
+              <span className={'tm-photo' + (sid && photos[sid] ? ' real' : '')}>{photo ? <img src={photo} alt={nick} loading="lazy" /> : <b>{nick.slice(0, 2).toUpperCase()}</b>}</span>
+              {role ? <span className="tm-role" title={roles.map((r) => ROLE_RU[r] || r).join(', ')}>{role}</span> : <span className="tm-role empty" />}
+              <b className="tm-nick">{fl && flagUrl(fl) ? <img className="tm-flag" src={flagUrl(fl)} alt="" title={flag ? countryFromFlag(flag) : countryRu(fl)} /> : null}{nick}</b>
+              <span className="tm-real">{real || li?.rn || li?.name || ' '}</span>
+              {inactive ? <span className="tm-pill dim">в запасе</span> : p ? <span className="tm-pill">{p.maps} карт · ADR {p.adr.toFixed(0)}</span> : <span className="tm-pill dim">нет в наших демках</span>}
               {p ? <span className={'tm-kd num' + (p.kd >= 1.1 ? ' good' : p.kd < 0.95 ? ' bad' : '')}>K/D {p.kd.toFixed(2)}</span> : null}
             </>
           );
-          return p ? <a key={nick} className="tm-player" href={href(`/player/${p.sid}`)} title={`${nick} — профиль игрока`}>{body}</a> : <div key={nick} className="tm-player">{body}</div>;
+          return sid ? <a key={nick} className="tm-player" href={href(`/player/${sid}`)} title={`${nick} — профиль игрока`}>{body}</a> : <div key={nick} className="tm-player">{body}</div>;
         })}
       </div>
-      {!rank && <p className="tiny muted" style={{ padding: '0 16px 12px' }}>Команды нет в рейтинге Valve — показаны игроки, чаще всего игравшие за неё в наших демках ({teamName}).</p>}
+      {subs.length > 0 && (
+        <div className="tm-subs">
+          <span className="tiny muted">Замены:</span>
+          {subs.map((x, i) => {
+            const inner = <>{x.flag && flagUrl(x.flag) ? <img className="tm-flag" src={flagUrl(x.flag)} alt="" /> : null}<b>{x.id}</b>{x.for ? <span className="muted"> за {x.for}</span> : null}{x.tour ? <span className="faint"> · {x.tour}</span> : null}</>;
+            return x.sid ? <a key={i} className="tm-sub" href={href(`/player/${x.sid}`)}>{inner}</a> : <span key={i} className="tm-sub">{inner}</span>;
+          })}
+        </div>
+      )}
+      {!players.length && !rank && <p className="tiny muted" style={{ padding: '0 16px 12px' }}>Состав с Liquipedia ещё не загружен и команды нет в рейтинге Valve — показаны игроки, чаще всего игравшие за неё в наших демках ({teamName}).</p>}
     </section>
   );
 }

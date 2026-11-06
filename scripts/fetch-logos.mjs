@@ -23,6 +23,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { liquipediaClient, parseInfobox, UA } from './lib/esports/liquipedia.mjs';
+import { noRefs, parseSquad, plain, templates } from './lib/wikitext.mjs';
 
 // same keys as teamKeys() in scripts/build-db.mjs and src/lib/teams.ts (the site looks logos up by them)
 const FILLER = new Set(['team', 'esports', 'esport', 'e', 'sports', 'gaming', 'clan', 'club', 'gg']);
@@ -117,10 +118,21 @@ async function main() {
     return f;
   };
   idx.pages ||= {};
-  const pagesTodo = need.pages.filter((p) => !(idx.pages[p]?.at > now - 30 * 86400000)).slice(0, 400);
-  for (const part of chunks(pagesTodo, 50)) {
+  // team pages of the world ranking first (rosters change often → weekly), the rest monthly
+  const tix = read(path.join(OUT, 'teams', 'index.json'));
+  const slugName = new Map((tix?.t || []).map((x) => [x[0], x[1]]));
+  const rankedPages = [];
+  for (const t of read(path.join(OUT, 'rankings.json'))?.teams || []) {
+    if (t[0] > 120) break;
+    const slug = teamKeys(t[2]).map((k) => tix?.k?.[k]).find(Boolean);
+    const pg = slug && slugName.get(slug);
+    if (pg && !rankedPages.includes(pg)) rankedPages.push(pg);
+  }
+  const stale = (p) => !idx.pages[p]?.sq || !(idx.pages[p].at > now - (rankedPages.includes(p) ? WEEK : 30 * 86400000));
+  const pagesTodo = [...new Set([...rankedPages, ...need.pages])].filter(stale).slice(0, 300);
+  for (const part of chunks(pagesTodo, 10)) {
     let j;
-    try { j = await lp.call({ action: 'query', prop: 'revisions', rvprop: 'content', rvslots: 'main', rvsection: '0', redirects: '1', titles: part.join('|') }, 'lp-team-info'); } catch (e) { console.log('инфобоксы команд:', e.message); break; }
+    try { j = await lp.call({ action: 'query', prop: 'revisions', rvprop: 'content', rvslots: 'main', redirects: '1', titles: part.join('|') }, 'lp-team-info'); } catch (e) { console.log('страницы команд:', e.message); break; }
     const q = j.query || {};
     const back = new Map();
     for (const x of [...(q.normalized || []), ...(q.redirects || [])]) back.set(x.to, x.from);
@@ -129,7 +141,17 @@ async function main() {
       for (let i = 0; i < 3 && back.has(req); i++) req = back.get(req);
       const content = p.revisions?.[0]?.slots?.main?.content || '';
       const ib = /\{\{\s*Infobox[ _]team/i.test(content) ? parseInfobox(content.replace(/Infobox[ _]team/i, 'Infobox league')) : null;
-      idx.pages[req] = { at: now, f: ib ? teamInfo(ib) : {} };
+      const f = ib ? teamInfo(ib) : {};
+      let sq = { squad: [], standins: [] };
+      try { sq = parseSquad(content); } catch { /* unusual page */ }
+      if (sq.squad.length) {
+        f.squad = sq.squad;
+        // coaches & analysts from the roster (with real names) replace the infobox list; the manager stays
+        const staff = sq.squad.filter((x) => x.role).map((x) => [x.id, /assist/i.test(x.role) ? 'Ассистент тренера' : /analyst/i.test(x.role) ? 'Аналитик' : /manager/i.test(x.role) ? 'Менеджер' : 'Тренер', x.name, x.flag]);
+        if (staff.length) f.staff = [...staff, ...(f.staff || []).filter(([, r]) => r === 'Менеджер')];
+      }
+      if (sq.standins.length) f.standins = sq.standins;
+      idx.pages[req] = { at: now, sq: 1, f };
       const file = ib && [ib.imagedark, ib.imagedarkmode, ib.image].map((x) => (x || '').replace(/^(File|Image):/i, '').trim()).find((x) => x && !DEFAULT.test(x));
       if (file) for (const k of teamKeys(req)) if (!idx.teams[k]?.file) idx.teams[k] = { file };
     }
@@ -216,6 +238,40 @@ async function main() {
     idx.players[sid] = { file };
     photoRank.push([rosterNicks.get(String(e.id || '').toLowerCase()) ?? 999, file]);
   }
+  // roster players (official squads + stand-ins) that are not among the pages we already have: their infobox
+  idx.ppl ||= {};
+  const lpToSid = new Map(Object.entries(links).filter(([, e]) => e.lp).map(([sid, e]) => [e.lp, sid]));
+  const squadOf = new Map(); // person page → [team page, rank]
+  for (const [pg, v] of Object.entries(idx.pages)) {
+    const r = rankedPages.indexOf(pg);
+    for (const x of [...(v.f?.squad || []), ...(v.f?.standins || [])]) if (x.t && !squadOf.has(x.t)) squadOf.set(x.t, [pg, r < 0 ? 999 : r + 1]);
+  }
+  const pplTodo = [...squadOf.keys()].filter((t) => !lpToSid.has(t) && !(idx.ppl[t]?.at > now - 30 * 86400000)).slice(0, 600);
+  for (const part of chunks(pplTodo, 50)) {
+    let j;
+    try { j = await lp.call({ action: 'query', prop: 'revisions', rvprop: 'content', rvslots: 'main', rvsection: '0', redirects: '1', titles: part.join('|') }, 'lp-roster-players'); } catch (e) { console.log('игроки составов:', e.message); break; }
+    const q = j.query || {};
+    const back = new Map();
+    for (const x of [...(q.normalized || []), ...(q.redirects || [])]) back.set(x.to, x.from);
+    for (const p of q.pages || []) {
+      let req = p.title;
+      for (let i = 0; i < 3 && back.has(req); i++) req = back.get(req);
+      const ib = templates(noRefs(p.revisions?.[0]?.slots?.main?.content || ''), 'Infobox player')[0];
+      if (!ib) { idx.ppl[req] = { at: now }; continue; }
+      const sid = (ib.steam64id || '').replace(/\D/g, '');
+      const l = {};
+      for (const k of ['faceit', 'twitter', 'instagram', 'twitch', 'youtube', 'telegram', 'vk', 'tiktok', 'kick']) if (ib[k] && !/\{\{/.test(ib[k])) l[k] = plain(ib[k]).replace(/\s+/g, '');
+      idx.ppl[req] = {
+        at: now, sid: sid.length === 17 ? sid : '', image: plain(ib.image).replace(/^(File|Image):/i, ''),
+        f: { lp: req, id: plain(ib.id) || req, name: plain(ib.name), rn: plain(ib.romanized_name), c: plain(ib.country), b: /^\d{4}-\d\d-\d\d$/.test(ib.birth_date || '') ? ib.birth_date : '', r: plain(ib.roles).toLowerCase().replace(/\s+/g, ''), l },
+      };
+    }
+  }
+  for (const [t, v] of Object.entries(idx.ppl)) {
+    if (!v.sid || !v.image || DEFAULT.test(v.image)) continue;
+    idx.players[v.sid] = { file: v.image };
+    photoRank.push([squadOf.get(t)?.[1] ?? 999, v.image]);
+  }
   photoRank.sort((a, b) => a[0] - b[0]);
 
   // ---- download queue, most visible first ----
@@ -297,7 +353,26 @@ async function main() {
   fs.writeFileSync(path.join(OUT, 'logos.json'), JSON.stringify({ src: 'Liquipedia', at: idx.at, t, e, p: ph }));
   // team infoboxes for the team pages
   const info = {};
-  for (const [pg, v] of Object.entries(idx.pages || {})) if (v.f && Object.keys(v.f).length) info[pg] = v.f;
+  const sidOf = (t) => lpToSid.get(t) || idx.ppl[t]?.sid || '';
+  for (const [pg, v] of Object.entries(idx.pages || {})) {
+    if (!v.f || !Object.keys(v.f).length) continue;
+    const f = { ...v.f };
+    if (f.squad) f.squad = f.squad.map((x) => ({ ...x, sid: sidOf(x.t) }));
+    if (f.standins) f.standins = f.standins.map((x) => ({ ...x, sid: sidOf(x.t) }));
+    info[pg] = f;
+  }
+  // profiles of roster players our demos don't have yet (their player page shows Liquipedia data only)
+  const known = new Set(Object.keys(links));
+  const pix = read(path.join(OUT, 'players', 'index.json'));
+  if (pix?.cols) { const si = pix.cols.indexOf('sid'); for (const r of pix.rows) known.add(String(r[si])); }
+  const extraOut = {};
+  for (const [t, v] of Object.entries(idx.ppl)) {
+    if (!v.sid || known.has(v.sid) || !v.f) continue;
+    const team = squadOf.get(t)?.[0];
+    extraOut[v.sid] = { ...v.f, ...(team ? { team } : {}) };
+  }
+  if (fs.existsSync(path.join(OUT, 'players'))) fs.writeFileSync(path.join(OUT, 'players', 'extra.json'), JSON.stringify(extraOut));
+  console.log(`составы: ${Object.values(info).filter((x) => x.squad).length} команд; игроков без демок с профилем: ${Object.keys(extraOut).length}`);
   if (fs.existsSync(path.join(OUT, 'teams'))) fs.writeFileSync(path.join(OUT, 'teams', 'info.json'), JSON.stringify(info));
   console.log(`фото игроков: ${Object.keys(ph).length}, инфобоксов команд: ${Object.keys(info).length}`);
   const haveWanted = [...want.keys()].filter((k) => t[k]).length;

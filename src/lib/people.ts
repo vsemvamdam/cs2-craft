@@ -41,7 +41,17 @@ export function countryRu(c: string) {
 export const ROLE_RU: Record<string, string> = { igl: 'капитан (IGL)', awp: 'снайпер (AWP)', entry: 'энтри', lurk: 'люркер', support: 'саппорт', rifle: 'райфлер', coach: 'тренер' };
 
 /** country name as Liquipedia writes it → flag image (emoji flags don't render on Windows) */
+// Liquipedia flag codes that are not ISO 3166 / flagcdn names
+const FLAG_FIX: Record<string, string> = { uk: 'gb', en: 'gb-eng', sc: 'gb-sct', wa: 'gb-wls', nir: 'gb-nir', xk: 'xk' };
 export function flagUrl(country?: string) {
-  const code = country ? COUNTRY[country] || (/^[A-Za-z]{2}$/.test(country) ? country.toUpperCase() : '') : '';
-  return code && code !== 'XK' ? `https://flagcdn.com/h20/${code.toLowerCase()}.png` : '';
+  if (!country) return '';
+  const low = country.toLowerCase();
+  const code = FLAG_FIX[low] || (COUNTRY[country] || (/^[a-z]{2}$/i.test(country) ? country : '')).toLowerCase();
+  return code ? `https://flagcdn.com/h20/${code}.png` : '';
+}
+/** «fr» / «uk» / «France» → country name in Russian */
+export function countryFromFlag(flag?: string) {
+  if (!flag) return '';
+  const code = FLAG_FIX[flag.toLowerCase()]?.slice(0, 2).toUpperCase() || flag.toUpperCase();
+  try { return new Intl.DisplayNames(['ru'], { type: 'region' }).of(code === 'UK' ? 'GB' : code) || flag; } catch { return flag; }
 }

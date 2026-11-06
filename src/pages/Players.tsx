@@ -4,7 +4,7 @@ import { copy, useAsync } from '../lib/hooks';
 import { href, setQuery, useRoute } from '../lib/router';
 import { decodeCode } from '../lib/crosshair';
 import { paintCrosshair } from '../lib/crosshair-draw';
-import { teamKeys, useTeamLogos, useTeamSlug } from '../lib/teams';
+import { loadLpLogos, loadTeamIndex, teamKeys, useTeamLogos, useTeamSlug, type TeamIndex } from '../lib/teams';
 import { LINK_META, linkUrl, countryRu, ROLE_RU } from '../lib/people';
 import '../styles/players.css';
 
@@ -244,7 +244,7 @@ function PlayerPage({ sid }: { sid: string }) {
   const info = links?.[sid];
   if (p.loading || ix.loading) return <Spinner />;
   const d = p.data;
-  if (!d || !row) return <div className="notice">Игрок не найден. <a className="link" href="#/players">Все игроки</a></div>;
+  if (!d || !row) return <LitePlayer sid={sid} />;
   const r = row;
   const kd = r.k / Math.max(r.d, 1);
   const stats: [string, string, string?][] = [
@@ -382,8 +382,18 @@ function TeamsControls() {
 
 type TeamCard = { name: string; rank?: number; pts?: number; reg?: string; rr?: number; prev?: number; roster: { nick: string; p?: Row }[]; demo?: { team: string; maps: number } };
 
+type SquadInfo = Record<string, { squad?: { id: string; role: string; sid?: string; inactive?: number }[] }>;
+let squadsP: Promise<SquadInfo> | null = null;
 function TeamsTab({ rows, teams, q, avatars, logo }: { rows: Row[]; teams: { team: string; players: Row[]; maps: number }[]; q: string; avatars: Record<string, string>; logo: ReturnType<typeof useTeamLogos> }) {
   const rk = useRanking();
+  // official rosters (Liquipedia team pages) replace the roster Valve counted, where we have them
+  const [squads, setSquads] = useState<SquadInfo>({});
+  const [tix, setTix] = useState<TeamIndex | null>(null);
+  useEffect(() => {
+    squadsP ||= fetch(import.meta.env.BASE_URL + 'data/teams/info.json').then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+    squadsP.then(setSquads);
+    loadTeamIndex().then(setTix);
+  }, []);
   const { query } = useRoute();
   const reg = query.get('reg') || '';
   const tsort = query.get('tsort') || 'rank';
@@ -395,20 +405,26 @@ function TeamsTab({ rows, teams, q, avatars, logo }: { rows: Row[]; teams: { tea
     for (const r of rows) { const k = r.name.toLowerCase(); byNick.set(k, [...(byNick.get(k) || []), r]); }
     const used = new Set<string>();
     const out: TeamCard[] = [];
+    const bySid = new Map(rows.map((r) => [r.sid, r]));
+    const pageOf = (n: string) => { const sl = teamKeys(n).map((k) => tix?.k[k]).find(Boolean); return sl ? tix?.t.find((x) => x[0] === sl)?.[1] : undefined; };
     for (const [rank, pts, name, roster, region, rr, prev] of rk?.teams || []) {
       const d = teamKeys(name).map((k) => demo.get(k)).find(Boolean);
       if (d) used.add(d.team);
-      const players = roster.map((nick) => {
-        const cands = byNick.get(nick.toLowerCase()) || [];
-        const p = cands.find((c) => d && c.team === d.team) || cands.sort((a, b) => b.maps - a.maps)[0];
-        return { nick, p };
-      });
+      const pg = pageOf(name);
+      const official = (pg && squads[pg]?.squad?.filter((x) => !x.role && !x.inactive)) || [];
+      const players = official.length >= 4
+        ? official.map((x) => ({ nick: x.id, p: (x.sid && bySid.get(x.sid)) || (byNick.get(x.id.toLowerCase()) || []).sort((a, b) => b.maps - a.maps)[0] }))
+        : roster.map((nick) => {
+          const cands = byNick.get(nick.toLowerCase()) || [];
+          const p = cands.find((c) => d && c.team === d.team) || cands.sort((a, b) => b.maps - a.maps)[0];
+          return { nick, p };
+        });
       out.push({ name, rank, pts, reg: region, rr, prev, roster: players, demo: d ? { team: d.team, maps: d.maps } : undefined });
     }
     // teams we have demos of but that are not in the ranking (academies, old rosters)
     for (const t of teams) if (!used.has(t.team)) out.push({ name: t.team, roster: t.players.slice(0, 5).map((p) => ({ nick: p.name, p })), demo: { team: t.team, maps: t.maps } });
     return out;
-  }, [rk, rows, teams]);
+  }, [rk, rows, teams, squads, tix]);
   const nq = q.trim().toLowerCase();
   const list = cards
     .filter((c) => (!reg || c.reg === reg) && (!nq || c.name.toLowerCase().includes(nq) || c.roster.some((x) => x.nick.toLowerCase().includes(nq))))
@@ -461,6 +477,47 @@ function TeamCardView({ c, avatars, logo }: { c: TeamCard; avatars: Record<strin
       <div className="row between tiny">
         {slug ? <a className="link small" href={href(`/team/${slug}`)}>Страница команды →</a> : c.demo ? <a className="link small" href={href(`/players?team=${encodeURIComponent(c.demo.team)}`)}>Статистика состава →</a> : <span className="muted">в наших демках пока нет</span>}
         {c.rank && c.demo ? <span className="muted">{c.demo.maps} карт</span> : null}
+      </div>
+    </div>
+  );
+}
+
+// ---- a roster player we have no demos of yet: Liquipedia profile only ----
+type Extra = PlayerInfo & { team?: string };
+let extraP: Promise<Record<string, Extra>> | null = null;
+function LitePlayer({ sid }: { sid: string }) {
+  const [e, setE] = useState<Extra | null | undefined>(undefined);
+  const [photo, setPhoto] = useState('');
+  const avatars = useAvatars();
+  const logo = useTeamLogos();
+  const slugOf = useTeamSlug();
+  useEffect(() => {
+    extraP ||= fetch(BASE + 'extra.json').then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+    extraP.then((x) => setE(x[sid] || null));
+    loadLpLogos().then((x) => { const f = x?.p?.[sid]; if (f) setPhoto(import.meta.env.BASE_URL + 'data/logos/' + f); });
+  }, [sid]);
+  if (e === undefined) return <Spinner />;
+  if (!e) return <div className="notice">Игрок не найден. <a className="link" href="#/players">Все игроки</a></div>;
+  const nick = e.id || e.lp || sid;
+  const slug = e.team ? slugOf(e.team) : null;
+  return (
+    <div className="stack" style={{ gap: 16 }}>
+      <div className="small muted"><a className="link" href="#/players">Игроки</a> / {nick}</div>
+      <div className="row" style={{ gap: 18, flexWrap: 'nowrap', alignItems: 'center' }}>
+        {photo ? <img className="pl-lite-photo" src={photo} alt={nick} /> : <PlayerAvatar sid={sid} name={nick} size={96} avatars={avatars} />}
+        <div className="stack" style={{ gap: 6 }}>
+          <h1>{nick}</h1>
+          {e.team && <div className="muted row" style={{ gap: 8 }}><TeamLogo team={e.team} size={22} logo={logo} />{slug ? <a className="link" href={`#/team/${slug}`}>{e.team}</a> : e.team}</div>}
+          <div className="small muted">
+            {[e.rn ? `${e.rn}${e.name && e.name !== e.rn ? ` (${e.name})` : ''}` : e.name, e.c ? countryRu(e.c) : '', e.b ? `${age(e.b)} ${yearsRu(age(e.b))}` : '', e.r ? e.r.split(',').map((x) => ROLE_RU[x] || x).join(', ') : ''].filter(Boolean).join(' · ')}
+          </div>
+        </div>
+      </div>
+      <PlayerLinks sid={sid} info={e} />
+      <div className="card pad stack" style={{ gap: 6 }}>
+        <b>Статистики из демок пока нет</b>
+        <span className="small muted">Игрок есть в официальном составе команды, но его матчей ещё нет в нашей базе турнирных демок. Как только демки с его участием будут разобраны, здесь появятся K/D, ADR, карты, прицел и раскидки.</span>
+        {e.lp && <a className="link small" href={`https://liquipedia.net/counterstrike/${encodeURIComponent(e.lp.replace(/ /g, '_'))}`} target="_blank" rel="noreferrer">Профиль на Liquipedia ↗</a>}
       </div>
     </div>
   );
