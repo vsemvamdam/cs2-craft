@@ -81,7 +81,7 @@ export function parseSquad(content) {
   }
   for (const f of templates(c, 'Stand-in').slice(0, 3)) {
     if (!f.id) continue;
-    out.standins.push({ id: plain(f.id), t: personTitle(f), name: plain(f.name), flag: (f.flag || '').toLowerCase(), for: plain(f.for), role: plain(f.role), tour: plain(f.tournament).replace(/\s+/g, ' ') });
+    out.standins.push({ id: plain(f.id), t: personTitle(f), name: plain(f.name), flag: (f.flag || '').toLowerCase(), for: plain(f.for), role: plain(f.role), tour: plain(String(f.tournament || '').replace(/<br\s*\/?>/gi, ' · ')).replace(/\s+/g, ' ').replace(/^[\s·]+|[\s·]+$/g, '') });
   }
   return out;
 }
