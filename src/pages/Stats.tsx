@@ -247,6 +247,8 @@ function Overview({ d }: { d: Profile }) {
           <CsRings s={s} />
         </div>
       )}
+      {d.public && <Showcase steamid={d.steamid} />}
+      {s && <WeaponStrip s={s} />}
       <div className="grid st-2col">
         <div className="card">
           <div className="card-head"><h3>Последние 2 недели</h3><span className="small muted">{hoursFmt(d.games?.recent.reduce((a, g) => a + g.m2, 0))}</span></div>
@@ -398,6 +400,7 @@ function CS2Stats({ d }: { d: Profile }) {
   return (
     <div className="stack" style={{ gap: 16 }}>
       <div className="card pad"><CsRings s={s} /></div>
+      <WeaponStrip s={s} />
       <div className="st-tiles">
         {tiles.map(([k, val, sub]) => <div key={k} className="st-tile"><span className="tiny muted">{k}</span><b className="num">{val}</b>{sub && <span className="tiny faint">{sub}</span>}</div>)}
       </div>
@@ -442,6 +445,59 @@ function CS2Stats({ d }: { d: Profile }) {
         </div>
       </div>
       <p className="tiny muted">Это общая статистика Steam по аккаунту: она копится с первого матча в CS:GO и продолжается в CS2. Что именно Valve засчитывает в неё в CS2, официально не описано, поэтому её стоит воспринимать как ориентир. Подробная статистика по каждому матчу — на вкладке «Матчи» (для подключённых аккаунтов).</p>
+    </div>
+  );
+}
+
+// ---- showcase: coins, medals, pins and trophies from the inventory -------------
+function Showcase({ steamid }: { steamid: string }) {
+  const inv = useAsync(() => api<Inventory>(`/api/inventory?id=${steamid}`).catch(() => null), [steamid]);
+  const list = useMemo(() => (inv.data?.items || []).filter((x) => /collectible/i.test(x.type || '') || /\b(Coin|Medal|Trophy|Pin)\b/.test(x.n)), [inv.data]);
+  if (inv.loading) return <div className="card pad st-showcase"><span className="tiny muted">Загружаю медали и значки…</span></div>;
+  if (!list.length) return null;
+  return (
+    <div className="card pad stack st-showcase" style={{ gap: 10 }}>
+      <div className="row between"><h3>Медали, монеты и значки</h3><span className="tiny muted">{list.length} · из инвентаря</span></div>
+      <div className="st-medals">
+        {list.map((x) => (
+          <span key={x.n} className="st-medal" title={x.n + (x.c > 1 ? ` ×${x.c}` : '')} style={x.col ? { ['--mc' as string]: '#' + x.col } : undefined}>
+            <img src={`https://community.cloudflare.steamstatic.com/economy/image/${x.i}/96fx96f`} alt={x.n} loading="lazy" width={48} height={48} />
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---- kills by weapon: a strip of silhouettes --------------------------------------
+let iconsP: Promise<Record<string, string>> | null = null;
+function loadWeaponIcons() {
+  iconsP ||= fetch(import.meta.env.BASE_URL + 'data/weapon-icons.json').then((r) => r.json()).then((j: { imgPrefix: string[]; w: Record<string, string> }) => {
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(j.w)) { const i = v.indexOf(':'); out[k] = (j.imgPrefix[+v.slice(0, i)] || '') + v.slice(i + 1); }
+    return out;
+  }).catch(() => ({}));
+  return iconsP;
+}
+function WeaponStrip({ s }: { s: Record<string, number> }) {
+  const icons = useAsync(loadWeaponIcons, []);
+  const list = WEAPONS.map(([key, name]) => ({ key, name, k: s['total_kills_' + key] || 0, shots: s['total_shots_' + key] || 0, hits: s['total_hits_' + key] || 0 }))
+    .concat([{ key: 'knife', name: 'Нож', k: s.total_kills_knife || 0, shots: 0, hits: 0 }, { key: 'hegrenade', name: 'Граната HE', k: s.total_kills_hegrenade || 0, shots: 0, hits: 0 }])
+    .filter((w) => w.k > 0).sort((a, b) => b.k - a.k);
+  if (!list.length) return null;
+  const max = list[0].k;
+  return (
+    <div className="card st-wstrip">
+      <div className="st-wstrip-label"><span>Оружие</span><span>Убийства</span></div>
+      <div className="st-wstrip-row">
+        {list.map((w) => (
+          <div key={w.key} className="st-wcell" title={`${w.name}: ${w.k.toLocaleString('ru-RU')} убийств${w.shots ? ` · точность ${Math.round((w.hits / w.shots) * 100)}%` : ''}`}>
+            <span className="st-wicon">{icons.data?.[w.key] ? <img src={icons.data[w.key] + '/128fx64f'} alt={w.name} loading="lazy" /> : <span className="tiny">{w.name}</span>}</span>
+            <b className="num">{w.k.toLocaleString('ru-RU')}</b>
+            <span className="st-wbar"><span style={{ width: `${(w.k / max) * 100}%` }} /></span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

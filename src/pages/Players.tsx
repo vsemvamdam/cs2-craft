@@ -4,7 +4,7 @@ import { copy, useAsync } from '../lib/hooks';
 import { href, setQuery, useRoute } from '../lib/router';
 import { decodeCode } from '../lib/crosshair';
 import { paintCrosshair } from '../lib/crosshair-draw';
-import { useTeamLogos } from '../lib/teams';
+import { teamKeys, useTeamLogos } from '../lib/teams';
 import '../styles/players.css';
 
 let avatarsP: Promise<Record<string, string>> | null = null;
@@ -129,7 +129,7 @@ function toRows(ix: Index | null): Row[] {
   return ix.rows.map((r) => Object.fromEntries(ix.cols.map((c, i) => [c, r[i]])) as unknown as Row);
 }
 
-type SortKey = 'name' | 'maps' | 'kd' | 'adr' | 'hs' | 'kpr' | 'open' | 'awp' | 'ud';
+type SortKey = 'name' | 'team' | 'maps' | 'kd' | 'adr' | 'hs' | 'kpr' | 'open' | 'awp' | 'ud';
 const SORTS: { k: SortKey; ru: string; v: (r: Row) => number | string; title?: string }[] = [
   { k: 'maps', ru: 'Карт', v: (r) => r.maps },
   { k: 'kd', ru: 'K/D', v: (r) => r.k / Math.max(r.d, 1) },
@@ -153,7 +153,14 @@ function PlayerList() {
   const team = query.get('team') || '';
   const min = +(query.get('min') || 3);
   const sort = (query.get('sort') || 'maps') as SortKey;
-  const tab = query.get('tab') || 'players';
+  // text columns go A→Я first, numbers from the largest; a second click on the same column flips it
+  const rev = query.get('rev') === '1';
+  const textCol = sort === 'name' || sort === 'team';
+  const asc = textCol !== rev;
+  const sortBy = (k: SortKey) => setQuery(k === sort ? { rev: rev ? null : '1' } : { sort: k === 'maps' ? null : k, rev: null });
+  const arrow = (k: SortKey) => (k === sort ? (asc ? ' ↑' : ' ↓') : '');
+  // the ranking of teams opens first; old links with a team filter / sort keep showing the players table
+  const tab = query.get('tab') || (query.get('team') || query.get('sort') || query.get('q') ? 'players' : 'teams');
   const rows = useMemo(() => toRows(ix.data), [ix.data]);
   const avatars = useAvatars();
   const logo = useTeamLogos();
@@ -167,13 +174,16 @@ function PlayerList() {
     const s = SORTS.find((x) => x.k === sort) || SORTS[0];
     return rows
       .filter((r) => (!nq || r.name.toLowerCase().includes(nq) || r.team.toLowerCase().includes(nq)) && (!team || r.team === team) && r.maps >= (nq ? 1 : min))
-      .sort((a, b) => (sort === 'name' ? a.name.localeCompare(b.name) : (s.v(b) as number) - (s.v(a) as number)));
-  }, [rows, q, team, min, sort]);
+      .sort((a, b) => {
+        const d = sort === 'name' ? a.name.localeCompare(b.name, 'ru') : sort === 'team' ? (a.team || '\uffff').localeCompare(b.team || '\uffff', 'ru') || b.maps - a.maps : (s.v(a) as number) - (s.v(b) as number);
+        return asc || sort === 'team' && !a.team !== !b.team ? d : -d;
+      });
+  }, [rows, q, team, min, sort, asc]);
   if (ix.loading) return <Spinner />;
   return (
     <div className="stack" style={{ gap: 16 }}>
       <div className="stack" style={{ gap: 6 }}>
-        <h1>Профессиональные игроки</h1>
+        <h1>Команды и игроки</h1>
         <p className="muted">Статистика, прицелы и раскидки профи — посчитаны напрямую из турнирных демок: каждое убийство, урон и граната. Прицел — тот, с которым игрок играл в матче.</p>
         {ix.data && <p className="small muted">{rows.length.toLocaleString('ru-RU')} игроков · обновлено {new Date(ix.data.updated).toLocaleDateString('ru-RU')}</p>}
       </div>
@@ -183,10 +193,11 @@ function PlayerList() {
         <>
           <div className="card pad row" style={{ gap: 10 }}>
             <div className="tabs" style={{ borderBottom: 0 }}>
-              <button className={tab === 'players' ? 'on' : ''} style={tab === 'players' ? { color: 'var(--text)', borderBottomColor: 'var(--accent)' } : undefined} onClick={() => setQuery({ tab: null })}>Игроки</button>
-              <button className={tab === 'teams' ? 'on' : ''} style={tab === 'teams' ? { color: 'var(--text)', borderBottomColor: 'var(--accent)' } : undefined} onClick={() => setQuery({ tab: 'teams' })}>Команды</button>
+              <button className={tab === 'teams' ? 'on' : ''} style={tab === 'teams' ? { color: 'var(--text)', borderBottomColor: 'var(--accent)' } : undefined} onClick={() => setQuery({ tab: null, team: null, sort: null, rev: null })}>Команды · рейтинг</button>
+              <button className={tab === 'players' ? 'on' : ''} style={tab === 'players' ? { color: 'var(--text)', borderBottomColor: 'var(--accent)' } : undefined} onClick={() => setQuery({ tab: 'players' })}>Игроки</button>
             </div>
             <input className="input small" placeholder="Поиск: ник или команда" value={q} onChange={(e) => setQuery({ q: e.target.value })} style={{ width: 220 }} />
+            {tab === 'teams' && <TeamsControls />}
             {tab === 'players' && (
               <>
                 <select className="select small" value={team} onChange={(e) => setQuery({ team: e.target.value })}>
@@ -203,34 +214,15 @@ function PlayerList() {
             )}
           </div>
           {tab === 'teams' ? (
-            <div className="feature-grid">
-              {teams.filter((t) => !q || t.team.toLowerCase().includes(q.toLowerCase()) || t.players.some((p) => p.name.toLowerCase().includes(q.toLowerCase()))).map((t) => (
-                <div key={t.team} className="card pad stack" style={{ gap: 8 }}>
-                  <div className="row between" style={{ flexWrap: 'nowrap' }}>
-                    <span className="row" style={{ gap: 10, flexWrap: 'nowrap', minWidth: 0 }}><TeamLogo team={t.team} size={34} logo={logo} /><h3 className="pl-ell">{t.team}</h3></span>
-                    <span className="tiny muted nowrap">{t.maps} карт</span>
-                  </div>
-                  <div className="stack" style={{ gap: 2 }}>
-                    {t.players.slice(0, 7).map((p) => (
-                      <a key={p.sid} className="pl-trow small" href={href(`/player/${p.sid}`)}>
-                        <PlayerAvatar sid={p.sid} name={p.name} size={24} avatars={avatars} />
-                        <b className="pl-ell">{p.name}</b>
-                        <span className="muted num nowrap">K/D {f2(p.k / Math.max(p.d, 1))} · ADR {f1(p.adr)}</span>
-                      </a>
-                    ))}
-                  </div>
-                  <a className="link small" href={href(`/players?team=${encodeURIComponent(t.team)}`)}>Статистика состава →</a>
-                </div>
-              ))}
-            </div>
+            <TeamsTab rows={rows} teams={teams} q={q} avatars={avatars} logo={logo} />
           ) : (
             <div className="card table-wrap">
               <table className="table">
                 <thead>
                   <tr>
-                    <th style={{ cursor: 'pointer' }} onClick={() => setQuery({ sort: 'name' })}>Игрок{sort === 'name' ? ' ↓' : ''}</th>
-                    <th>Команда</th>
-                    {SORTS.map((s) => <th key={s.k} className="r" title={s.title} style={{ cursor: 'pointer', color: sort === s.k ? 'var(--text)' : undefined }} onClick={() => setQuery({ sort: s.k })}>{s.ru}{sort === s.k ? ' ↓' : ''}</th>)}
+                    <th className="pl-sort" title="Сортировать; ещё клик — в обратную сторону" style={{ color: sort === 'name' ? 'var(--text)' : undefined }} onClick={() => sortBy('name')}>Игрок{arrow('name')}</th>
+                    <th className="pl-sort" title="Сортировать; ещё клик — в обратную сторону" style={{ color: sort === 'team' ? 'var(--text)' : undefined }} onClick={() => sortBy('team')}>Команда{arrow('team')}</th>
+                    {SORTS.map((s) => <th key={s.k} className="r pl-sort" title={(s.title ? s.title + '. ' : '') + 'Клик — сортировать, ещё клик — в обратную сторону'} style={{ color: sort === s.k ? 'var(--text)' : undefined }} onClick={() => sortBy(s.k)}>{s.ru}{arrow(s.k)}</th>)}
                     <th>Прицел</th>
                   </tr>
                 </thead>
@@ -391,6 +383,120 @@ function PlayerPage({ sid }: { sid: string }) {
         </div>
       </div>
       <p className="tiny muted">{info?.lp ? <>Имя, страна, роль и ссылки на соцсети — <a className="link" href="https://liquipedia.net/counterstrike/" target="_blank" rel="noreferrer">Liquipedia</a> (CC BY-SA 3.0){info.fl ? ', уровень FACEIT — FACEIT API' : ''}. </> : null}Статистика посчитана по турнирным демкам из открытого архива (OpenCS2, CC BY 4.0) — это не полная карьерная статистика, а только матчи, попавшие в базу.</p>
+    </div>
+  );
+}
+
+// ---- teams: world ranking (Valve Regional Standings) + our demo stats -------------------------------------
+type Ranking = { date: string; prev: string | null; teams: [number, number, string, string[], string, number, number][] };
+let rankP: Promise<Ranking | null> | null = null;
+function useRanking() {
+  const [r, setR] = useState<Ranking | null | undefined>(undefined);
+  useEffect(() => {
+    rankP ||= fetch(import.meta.env.BASE_URL + 'data/rankings.json').then((x) => (x.ok ? x.json() : null)).catch(() => null);
+    rankP.then(setR);
+  }, []);
+  return r;
+}
+const REGION: Record<string, string> = { EU: 'Европа', AM: 'Америка', AS: 'Азия' };
+
+function TeamsControls() {
+  const { query } = useRoute();
+  const reg = query.get('reg') || '';
+  const tsort = query.get('tsort') || 'rank';
+  return (
+    <>
+      <div className="seg">
+        {[['', 'Весь мир'], ['EU', 'Европа'], ['AM', 'Америка'], ['AS', 'Азия']].map(([k, ru]) => <button key={k} className={reg === k ? 'on' : ''} onClick={() => setQuery({ reg: k || null })}>{ru}</button>)}
+      </div>
+      <select className="select small" value={tsort} onChange={(e) => setQuery({ tsort: e.target.value === 'rank' ? null : e.target.value })}>
+        <option value="rank">По мировому рейтингу</option>
+        <option value="maps">По картам в наших демках</option>
+      </select>
+    </>
+  );
+}
+
+type TeamCard = { name: string; rank?: number; pts?: number; reg?: string; rr?: number; prev?: number; roster: { nick: string; p?: Row }[]; demo?: { team: string; maps: number } };
+
+function TeamsTab({ rows, teams, q, avatars, logo }: { rows: Row[]; teams: { team: string; players: Row[]; maps: number }[]; q: string; avatars: Record<string, string>; logo: ReturnType<typeof useTeamLogos> }) {
+  const rk = useRanking();
+  const { query } = useRoute();
+  const reg = query.get('reg') || '';
+  const tsort = query.get('tsort') || 'rank';
+  const [limit, setLimit] = useState(60);
+  const cards = useMemo(() => {
+    const demo = new Map<string, (typeof teams)[0]>();
+    for (const t of teams) for (const k of teamKeys(t.team)) if (!demo.has(k)) demo.set(k, t);
+    const byNick = new Map<string, Row[]>();
+    for (const r of rows) { const k = r.name.toLowerCase(); byNick.set(k, [...(byNick.get(k) || []), r]); }
+    const used = new Set<string>();
+    const out: TeamCard[] = [];
+    for (const [rank, pts, name, roster, region, rr, prev] of rk?.teams || []) {
+      const d = teamKeys(name).map((k) => demo.get(k)).find(Boolean);
+      if (d) used.add(d.team);
+      const players = roster.map((nick) => {
+        const cands = byNick.get(nick.toLowerCase()) || [];
+        const p = cands.find((c) => d && c.team === d.team) || cands.sort((a, b) => b.maps - a.maps)[0];
+        return { nick, p };
+      });
+      out.push({ name, rank, pts, reg: region, rr, prev, roster: players, demo: d ? { team: d.team, maps: d.maps } : undefined });
+    }
+    // teams we have demos of but that are not in the ranking (academies, old rosters)
+    for (const t of teams) if (!used.has(t.team)) out.push({ name: t.team, roster: t.players.slice(0, 5).map((p) => ({ nick: p.name, p })), demo: { team: t.team, maps: t.maps } });
+    return out;
+  }, [rk, rows, teams]);
+  const nq = q.trim().toLowerCase();
+  const list = cards
+    .filter((c) => (!reg || c.reg === reg) && (!nq || c.name.toLowerCase().includes(nq) || c.roster.some((x) => x.nick.toLowerCase().includes(nq))))
+    .sort((a, b) => (tsort === 'maps' ? (b.demo?.maps || 0) - (a.demo?.maps || 0) : (a.rank || 1e9) - (b.rank || 1e9) || (b.demo?.maps || 0) - (a.demo?.maps || 0)));
+  if (rk === undefined) return <Spinner />;
+  return (
+    <div className="stack" style={{ gap: 12 }}>
+      {rk && <p className="small muted">Мировой рейтинг — официальный рейтинг Valve (Valve Regional Standings), по нему зовут на мейджоры. Обновлён {new Date(rk.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}{rk.prev ? `, стрелки — изменение места с ${new Date(rk.prev).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}` : ''}. Статистика игроков — из наших турнирных демок.</p>}
+      <div className="pl-teams">
+        {list.slice(0, limit).map((c) => <TeamCardView key={c.name + (c.rank || '')} c={c} avatars={avatars} logo={logo} />)}
+      </div>
+      {list.length > limit && <button className="btn" onClick={() => setLimit((l) => l + 120)}>Показать ещё ({list.length - limit})</button>}
+      {!list.length && <div className="empty">Ничего не найдено</div>}
+    </div>
+  );
+}
+
+function TeamCardView({ c, avatars, logo }: { c: TeamCard; avatars: Record<string, string>; logo: ReturnType<typeof useTeamLogos> }) {
+  const move = c.rank && c.prev ? c.prev - c.rank : null;
+  return (
+    <div className={'card pad stack pl-tcard' + (c.rank && c.rank <= 3 ? ' top' + c.rank : '')} style={{ gap: 10 }}>
+      <div className="pl-thead">
+        {c.rank ? <span className="pl-wrank" title="Место в мировом рейтинге Valve">#{c.rank}</span> : <span className="pl-wrank none" title="Нет в мировом рейтинге Valve">—</span>}
+        <TeamLogo team={c.demo?.team || c.name} size={36} logo={logo} />
+        <div className="stack" style={{ gap: 2, minWidth: 0 }}>
+          <h3 className="pl-ell" title={c.name}>{c.name}</h3>
+          <span className="tiny muted row" style={{ gap: 8 }}>
+            {c.pts ? <span>{c.pts.toLocaleString('ru-RU')} очк.</span> : null}
+            {c.reg ? <span>{REGION[c.reg]} #{c.rr}</span> : null}
+            {move != null ? <span className={move > 0 ? 'pl-up' : move < 0 ? 'pl-down' : ''} title="Изменение места за месяц">{move > 0 ? `▲${move}` : move < 0 ? `▼${-move}` : '='}</span> : c.rank ? <span className="pl-up" title="Не было в прошлом рейтинге">new</span> : null}
+            {!c.rank && c.demo ? <span>{c.demo.maps} карт в демках</span> : null}
+          </span>
+        </div>
+      </div>
+      <div className="pl-roster">
+        {c.roster.map(({ nick, p }) => {
+          const inner = (
+            <>
+              {p ? <PlayerAvatar sid={p.sid} name={p.name} size={26} avatars={avatars} /> : <span className="pl-ava pl-ini" style={{ width: 26, height: 26, fontSize: 10, background: `hsl(${HUE(nick)} 25% 28%)` }}>{nick.slice(0, 2).toUpperCase()}</span>}
+              <b className="pl-ell" title={nick}>{nick}</b>
+              <span className="num tiny" title="K/D">{p ? f2(p.k / Math.max(p.d, 1)) : ''}</span>
+              <span className="num tiny muted" title="ADR">{p ? f1(p.adr) : ''}</span>
+            </>
+          );
+          return p ? <a key={nick} className="pl-rrow" href={href(`/player/${p.sid}`)}>{inner}</a> : <div key={nick} className="pl-rrow">{inner}</div>;
+        })}
+      </div>
+      <div className="row between tiny">
+        {c.demo ? <a className="link small" href={href(`/players?team=${encodeURIComponent(c.demo.team)}`)}>Статистика состава →</a> : <span className="muted">в наших демках пока нет</span>}
+        {c.rank && c.demo ? <span className="muted">{c.demo.maps} карт</span> : null}
+      </div>
     </div>
   );
 }

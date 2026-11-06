@@ -38,6 +38,20 @@ export const CATEGORIES: Record<string, string> = {
   gloves: 'Перчатки',
   equipment: 'Снаряжение',
 };
+/** everything that is not a weapon skin (items.json + stickers.json), as Steam groups it */
+export const OTHER_CATEGORIES: Record<string, string> = {
+  sticker: 'Наклейки',
+  agent: 'Агенты',
+  charm: 'Брелоки',
+  container: 'Кейсы и капсулы',
+  key: 'Ключи',
+  graffiti: 'Граффити',
+  music: 'Наборы музыки',
+  patch: 'Нашивки',
+  collectible: 'Коллекционные',
+  pass: 'Пропуска',
+  gift: 'Подарки',
+};
 
 export const STICKER_EFFECTS: Record<string, string> = {
   Other: 'Обычная',

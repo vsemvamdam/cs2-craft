@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Turns the price store into the static files the website reads:
-//   public/data/prices.json      current prices for every skin variant, sticker and charm
+//   public/data/prices.json      current prices for every skin variant, sticker, charm and other item (items.json)
 //   public/data/h/<skinId>.json  all-time history (Steam) + daily snapshots for one skin
 // Safe to run with an empty store: it then writes an empty prices.json.
 
@@ -62,6 +62,7 @@ async function main() {
   const db = await readJSON(path.join(DATA, 'db.json'));
   const stickers = (await readJSON(path.join(DATA, 'stickers.json')))?.stickers || [];
   const charms = (await readJSON(path.join(DATA, 'charms.json')))?.charms || [];
+  const itemsFile = await readJSON(path.join(DATA, 'items.json'));
   const current = (await readJSON(path.join(P, 'current.json'))) || { steam: {}, skinport: {}, phases: {} };
   const histRates = await readJSON(path.join(H, '_rates.json'));
   const index = buildNameIndex(db);
@@ -93,6 +94,19 @@ async function main() {
   for (const x of stickers) if (x.m) { const r = row(x.m); if (r) st[x.id] = r; }
   const ch = {};
   for (const x of charms) { const r = row(x.m); if (r) ch[x.id] = r; }
+  // everything else (agents, cases, keys, graffiti…, see scripts/build-items.mjs): the cheapest of the item's market
+  // names — a music kit has a StatTrak™ twin, a graffiti pattern has up to 19 colours
+  const ot = {};
+  const tints = itemsFile?.tints || [];
+  const low = (r) => r[0] ?? r[2] ?? Infinity;
+  for (const x of itemsFile?.items || []) {
+    if (!x.m?.length) continue;
+    let names = x.m;
+    if (x.k) names = [...names, ...(x.k === 1 ? tints : x.k.map((i) => tints[i])).map((t) => `${x.m[0]} (${t})`)];
+    let best = null;
+    for (const n of names) { const r = row(n); if (r && (!best || low(r) < low(best))) best = r; }
+    if (best) ot[x.id] = best;
+  }
 
   // most traded skins (Skinport 7-day volume) — the list for collecting Steam history from a home connection
   // (Steam refuses market history requests from GitHub servers), see scripts/collect-history.mjs
@@ -103,7 +117,7 @@ async function main() {
   await writeJSON(path.join(DATA, 'prices.json'), {
     updated: current.updated || null,
     rates: current.rates || { USD: 1 },
-    s, ph, st, ch,
+    s, ph, st, ch, ot,
   });
 
   // ---- per-skin history files ----
@@ -123,7 +137,7 @@ async function main() {
     }
     if (Object.keys(out).length) { await writeJSON(path.join(OUT_H, skin.id + '.json'), out); files++; }
   }
-  console.log(`prices.json: ${Object.keys(s).length} skins, ${Object.keys(st).length} stickers, ${Object.keys(ch).length} charms; history files: ${files} (${points} points)`);
+  console.log(`prices.json: ${Object.keys(s).length} skins, ${Object.keys(st).length} stickers, ${Object.keys(ch).length} charms, ${Object.keys(ot).length} other items; history files: ${files} (${points} points)`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

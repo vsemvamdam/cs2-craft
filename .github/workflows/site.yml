@@ -36,6 +36,12 @@ jobs:
       - run: npm ci
       - name: База предметов (ByMykel/CSGO-API)
         run: node scripts/build-db.mjs || echo "::warning::не удалось обновить базу — собираю из закоммиченной"
+      - name: Другие предметы (агенты, кейсы, брелоки, граффити…)
+        run: node scripts/build-items.mjs || echo "::warning::другие предметы не обновились — беру закоммиченные"
+      - name: Мировой рейтинг команд (Valve Regional Standings)
+        run: |
+          git clone -q --depth 1 https://github.com/ValveSoftware/counter-strike_regional_standings /tmp/vrs \
+            && node scripts/build-rankings.mjs --dir /tmp/vrs || echo "::warning::рейтинг VRS не обновился"
       - name: Загрузить хранилище цен
         run: scripts/store.sh pull prices
       - name: Текущие цены (Steam, Skinport, курс ЦБ)

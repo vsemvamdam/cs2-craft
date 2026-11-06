@@ -243,14 +243,19 @@ function Picker({ db, prices, cfg, rarity, onAdd, onClose }: { db: Indexed; pric
   const [col, setCol] = useState('');
   const [float, setFloat] = useState('0.06');
   const [n, setN] = useState(1);
-  const [sort, setSort] = useState<'price' | 'name'>('price');
+  const [sort, setSort] = useState<'price' | 'name' | 'rar'>('price');
+  const [desc, setDesc] = useState(false);
+  // a second click on the active sort flips it; rarity starts from the rarest (red → pink → purple → blue…)
+  const pickSort = (k: 'price' | 'name' | 'rar') => { if (k === sort) setDesc(!desc); else { setSort(k); setDesc(false); } };
+  // ↓ = from the largest (most expensive / rarest / Я), ↑ = from the smallest — same as the players table
+  const arrow = (k: string) => (k !== sort ? '' : (k === 'rar') !== desc ? ' ↓' : ' ↑');
   const fl = Math.max(0, Math.min(1, parseFloat(float.replace(',', '.')) || 0));
   const flag = cfg.st ? 's' : '';
   const list = useMemo(() => {
     const words = norm(dq).split(' ').filter(Boolean);
     const out = db.skins.filter((s) => {
       if (!canBeInput(s, cfg.mode)) return false;
-      if (s.rar !== rar) return false;
+      if (rar && s.rar !== rar) return false;
       if (cfg.st && !s.st) return false;
       if (col && !s.col.includes(col)) return false;
       if (!poolFor(db, s, cfg.mode, cfg.st).pool.length) return false;
@@ -259,11 +264,14 @@ function Picker({ db, prices, cfg, rarity, onAdd, onClose }: { db: Indexed; pric
     });
     const price = (s: Skin) => skinPrice(prices, s, flag, wearOf(Math.min(s.mx, Math.max(s.mn, fl))), source);
     const rows = out.map((s) => ({ s, p: price(s) }));
-    if (sort === 'price') rows.sort((a, b) => (a.p ?? 1e12) - (b.p ?? 1e12));
-    else rows.sort((a, b) => a.s.name.localeCompare(b.s.name));
+    const byPrice = (a: { p: number | null | undefined }, b: { p: number | null | undefined }) => (a.p ?? 1e12) - (b.p ?? 1e12);
+    const sign = desc ? -1 : 1;
+    if (sort === 'price') rows.sort((a, b) => sign * byPrice(a, b));
+    else if (sort === 'rar') rows.sort((a, b) => sign * (b.s.rar - a.s.rar) || byPrice(a, b));
+    else rows.sort((a, b) => sign * a.s.name.localeCompare(b.s.name));
     return rows.slice(0, 300);
-  }, [db, prices, dq, rar, col, fl, cfg.mode, cfg.st, sort, source]);
-  const cols = useMemo(() => db.collections.filter((c) => (cfg.mode === 'gold' ? c.gold.length : (db.colTiers.get(c.id)?.get(rar + 1) || []).length)).sort((a, b) => a.name.localeCompare(b.name)), [db, cfg.mode, rar]);
+  }, [db, prices, dq, rar, col, fl, cfg.mode, cfg.st, sort, desc, source]);
+  const cols = useMemo(() => db.collections.filter((c) => (cfg.mode === 'gold' ? c.gold.length : rar ? (db.colTiers.get(c.id)?.get(rar + 1) || []).length : [2, 3, 4, 5, 6].some((r) => (db.colTiers.get(c.id)?.get(r) || []).length))).sort((a, b) => a.name.localeCompare(b.name)), [db, cfg.mode, rar]);
   const lockedRar = rarity != null;
   return (
     <div className="modal-bg" onClick={onClose}>
@@ -277,7 +285,8 @@ function Picker({ db, prices, cfg, rarity, onAdd, onClose }: { db: Indexed; pric
             <input autoFocus className="input grow" placeholder="Название скина…" value={q} onChange={(e) => setQ(e.target.value)} />
             {cfg.mode === 'weapon' && (
               <select className="select" value={rar} disabled={lockedRar} onChange={(e) => setRar(+e.target.value)} title={lockedRar ? 'Редкость задана первым предметом' : ''}>
-                {[1, 2, 3, 4, 5].map((r) => <option key={r} value={r}>{RARITIES[r].ru}</option>)}
+                {!lockedRar && <option value={0}>Все редкости</option>}
+                {[5, 4, 3, 2, 1].map((r) => <option key={r} value={r}>{RARITIES[r].ru}</option>)}
               </select>
             )}
             <select className="select" value={col} onChange={(e) => setCol(e.target.value)} style={{ maxWidth: 260 }}>
@@ -298,7 +307,11 @@ function Picker({ db, prices, cfg, rarity, onAdd, onClose }: { db: Indexed; pric
             <span className="small muted">Количество</span>
             <div className="seg">{[1, 5, 10].filter((x) => x <= (cfg.mode === 'gold' ? 5 : 10)).map((x) => <button key={x} className={n === x ? 'on' : ''} onClick={() => setN(x)}>×{x}</button>)}</div>
             <span className="small muted">Сортировка</span>
-            <div className="seg"><button className={sort === 'price' ? 'on' : ''} onClick={() => setSort('price')}>Цена</button><button className={sort === 'name' ? 'on' : ''} onClick={() => setSort('name')}>Имя</button></div>
+            <div className="seg" title="Ещё клик по выбранной — в обратную сторону">
+              <button className={sort === 'price' ? 'on' : ''} onClick={() => pickSort('price')}>Цена{arrow('price')}</button>
+              {cfg.mode === 'weapon' && <button className={sort === 'rar' ? 'on' : ''} onClick={() => { pickSort('rar'); if (!lockedRar && sort !== 'rar') setRar(0); }}>Редкость{arrow('rar')}</button>}
+              <button className={sort === 'name' ? 'on' : ''} onClick={() => pickSort('name')}>Имя{arrow('name')}</button>
+            </div>
           </div>
           <div className="table-wrap" style={{ maxHeight: '56vh' }}>
             <table className="table">

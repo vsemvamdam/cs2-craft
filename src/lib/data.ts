@@ -39,7 +39,12 @@ export type Prices = {
   ph: Record<string, Record<string, Record<string, [number | null, number, number | null, number]>>>;
   st: Record<string, PriceRow>;
   ch: Record<string, PriceRow>;
+  /** agents, cases, keys, graffiti… (items.json) */
+  ot?: Record<string, PriceRow>;
 };
+/** a non-skin item from items.json (scripts/build-items.mjs): c = category, n = Russian name, r = rarity 0–7,
+ *  rn = its in-game rarity name, t = kind ("Кейс", "Значок"…), m = market names, o = order (newer = larger) */
+export type OtherItem = { id: string; c: string; n: string; en?: string; r: number; rn?: string; i: string; m?: string[]; t?: string; o?: number; k?: 1 | number[] };
 export type HistoryFile = Record<string, { cur?: string; p?: [number, number, number][]; s?: [number, number | null, number | null][] }>;
 
 const BASE = import.meta.env.BASE_URL + 'data/';
@@ -106,6 +111,9 @@ export function loadStickers(): Promise<Sticker[]> {
 }
 export function loadCharms(): Promise<Charm[]> {
   return getJSON<{ imgPrefix: string[]; charms: Charm[] }>('charms.json').then((j) => (setImgPrefix(j.imgPrefix), j.charms));
+}
+export function loadItems(): Promise<OtherItem[]> {
+  return getJSON<{ imgPrefix: string[]; items: OtherItem[] }>('items.json').then((j) => (setImgPrefix(j.imgPrefix), j.items));
 }
 export function loadHistory(id: string): Promise<HistoryFile | null> {
   return getJSON<HistoryFile>(`h/${id}.json`).catch(() => null);

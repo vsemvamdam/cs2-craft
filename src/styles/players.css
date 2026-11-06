@@ -17,3 +17,27 @@
 .pl-link { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px; font-weight: 600; text-decoration: none; }
 .pl-link:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); background: var(--surface-2); }
 .pl-link i { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+
+.pl-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+.pl-sort:hover { color: var(--text); }
+
+/* teams: world ranking cards */
+.pl-teams{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.pl-tcard{position:relative;overflow:hidden}
+.pl-tcard.top1{box-shadow:inset 0 2px 0 #e4ae39}
+.pl-tcard.top2{box-shadow:inset 0 2px 0 #b8c2cc}
+.pl-tcard.top3{box-shadow:inset 0 2px 0 #c7834a}
+.pl-thead{display:grid;grid-template-columns:auto 36px minmax(0,1fr);gap:10px;align-items:center}
+.pl-thead h3{font-size:17px}
+.pl-wrank{min-width:42px;padding:4px 6px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border);font-weight:800;font-size:15px;text-align:center;font-variant-numeric:tabular-nums}
+.top1 .pl-wrank{color:#e4ae39;border-color:#e4ae3966}
+.top2 .pl-wrank{color:#c9d2db;border-color:#c9d2db55}
+.top3 .pl-wrank{color:#d08a50;border-color:#d08a5066}
+.pl-wrank.none{color:var(--faint)}
+.pl-up{color:var(--good)}
+.pl-down{color:var(--bad)}
+.pl-roster{display:flex;flex-direction:column;gap:2px}
+.pl-rrow{display:grid;grid-template-columns:26px minmax(0,1fr) 38px 38px;gap:8px;align-items:center;padding:3px 4px;border-radius:6px;color:inherit}
+.pl-rrow span{text-align:right}
+a.pl-rrow:hover{background:var(--surface-2)}
+a.pl-rrow:hover b{color:var(--accent)}

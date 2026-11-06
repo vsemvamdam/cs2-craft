@@ -10,7 +10,7 @@ const NAV = [
   { to: '/tradeup', label: 'Крафты' },
   { to: '/nades', label: 'Раскидки' },
   { to: '/callouts', label: 'Коллауты' },
-  { to: '/players', label: 'Игроки' },
+  { to: '/players', label: 'Команды и игроки' },
   { to: '/esports', label: 'Матчи' },
   { to: '/stats', label: 'Статистика' },
   { to: '/crosshair', label: 'Прицел' },

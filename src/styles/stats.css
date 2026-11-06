@@ -65,3 +65,24 @@
   .st-wrow > :last-child { display: none; }
   .st-search { flex-direction: column; }
 }
+
+/* showcase medals / coins / pins */
+.st-medals { display: flex; flex-wrap: wrap; gap: 10px; }
+.st-medal { width: 56px; height: 56px; display: grid; place-items: center; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); position: relative; transition: transform .12s, border-color .12s; }
+.st-medal::after { content: ''; position: absolute; inset: auto 8px 3px; height: 2px; border-radius: 2px; background: var(--mc, transparent); opacity: .7; }
+.st-medal:hover { transform: translateY(-2px); border-color: var(--mc, var(--accent)); }
+.st-medal img { width: 46px; height: 46px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,.35)); }
+
+/* kills by weapon */
+.st-wstrip { display: flex; align-items: stretch; overflow: hidden; }
+.st-wstrip-label { writing-mode: vertical-rl; transform: rotate(180deg); display: flex; justify-content: space-around; gap: 18px; padding: 10px 8px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border-right: 1px solid var(--border); background: var(--surface-2); }
+.st-wstrip-row { display: flex; gap: 2px; overflow-x: auto; padding: 12px 10px 10px; scrollbar-width: thin; }
+.st-wcell { flex: 0 0 auto; min-width: 74px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 8px; }
+.st-wcell:hover { background: var(--surface-2); }
+.st-wicon { height: 30px; display: grid; place-items: center; }
+.st-wicon img { height: 30px; max-width: 86px; object-fit: contain; filter: brightness(0) invert(.92); opacity: .9; }
+:root[data-theme="light"] .st-wicon img { filter: brightness(0); opacity: .75; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .st-wicon img { filter: brightness(0); opacity: .75; } }
+.st-wcell b { font-size: 15px; }
+.st-wbar { width: 100%; height: 3px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+.st-wbar span { display: block; height: 100%; background: var(--accent); }
